@@ -133,6 +133,33 @@ Policy files and decree data are **bundled inside the package** under
 `src/vsentinel/resources/` and loaded via `importlib.resources`, so they work
 wherever the package is installed — no need to copy config/ or data/ directories.
 
+### Neo4j legal retrieval (optional)
+
+The default retriever is offline BM25 over the packaged decree seed. For **real,
+reranked citations** over a legal-knowledge graph (ND-142/2026 + FERPA + COPPA,
+embedded with `BAAI/bge-m3` in Neo4j AuraDB), inject the optional `Neo4jRetriever`:
+
+```bash
+uv sync --extra neo4j        # neo4j + sentence-transformers + torch + transformers
+cp .env.example .env         # then fill in your NEO4J_* credentials (gitignored)
+```
+
+```python
+from vsentinel import Sentinel, Neo4jRetriever
+
+# credentials read from NEO4J_URI / NEO4J_USERNAME / NEO4J_PASSWORD / NEO4J_DATABASE
+with Neo4jRetriever() as retriever:           # closes the driver on exit
+    s = Sentinel(retriever=retriever)
+    trace = s.run("Trách nhiệm của nhà cung cấp hệ thống AI rủi ro cao?")
+```
+
+`Neo4jRetriever` is a drop-in for the BM25 `Retriever` — same
+`search(query, k) -> list[Article]` contract — running corpus routing →
+bge-m3 vector search → RRF dual-query fusion → cross-encoder rerank. Heavy deps
+load lazily, so `import vsentinel` never requires them. Tune via `Neo4jConfig`
+(`dual_query`, `rerank`, `law`, `candidate_k`, …). **Never commit `.env`**; rotate
+the AuraDB password if it is ever exposed.
+
 ### Runnable examples
 
 | File | What it shows | Needs Ollama? |

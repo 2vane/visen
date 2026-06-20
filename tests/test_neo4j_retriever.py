@@ -1,0 +1,181 @@
+"""Offline tests for the Neo4j retriever — every heavy dep is mocked.
+
+These must pass without ``neo4j``/``torch``/``sentence-transformers`` installed,
+so we inject fake embedder/driver collaborators and disable rerank + dual-query.
+"""
+from __future__ import annotations
+
+import pytest
+
+from vsentinel.retrievers import Neo4jConfig, Neo4jRetriever
+from vsentinel.retrievers.fusion import fuse_hits
+from vsentinel.schema import Article
+
+
+# --- Neo4jConfig.from_env ----------------------------------------------------
+
+def test_from_env_reads_vars(monkeypatch):
+    monkeypatch.setenv("NEO4J_URI", "neo4j+s://example.databases.neo4j.io")
+    monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+    monkeypatch.setenv("NEO4J_PASSWORD", "secret")
+    monkeypatch.setenv("NEO4J_DATABASE", "mydb")
+
+    config = Neo4jConfig.from_env()
+
+    assert config.uri == "neo4j+s://example.databases.neo4j.io"
+    assert config.username == "neo4j"
+    assert config.password == "secret"
+    assert config.database == "mydb"
+
+
+def test_from_env_database_defaults_to_neo4j(monkeypatch):
+    monkeypatch.setenv("NEO4J_URI", "neo4j+s://example.databases.neo4j.io")
+    monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+    monkeypatch.setenv("NEO4J_PASSWORD", "secret")
+    monkeypatch.delenv("NEO4J_DATABASE", raising=False)
+
+    assert Neo4jConfig.from_env().database == "neo4j"
+
+
+def test_from_env_missing_required_raises(monkeypatch):
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+    monkeypatch.setenv("NEO4J_PASSWORD", "secret")
+
+    with pytest.raises(ValueError, match="NEO4J_URI"):
+        Neo4jConfig.from_env()
+
+
+# --- fake collaborators ------------------------------------------------------
+
+class _FakeEmbedder:
+    def embed(self, text: str) -> list[float]:
+        return [0.0] * 1024
+
+
+def _canned_row(node_id: str, citation: str, text: str, score: float, rank: int) -> dict:
+    return {
+        "id": node_id,
+        "citation": citation,
+        "kind": "clause",
+        "text": text,
+        "context_text": "",
+        "section_number": None,
+        "section_title": None,
+        "article_number": "15",
+        "clause_number": "1",
+        "point_label": None,
+        "paragraph_path": None,
+        "term": None,
+        "score": score,
+        "corpus": "vn",
+        "index_name": "legal_embedding_index",
+        "document_id": "142-2026-nd-cp",
+        "document_citation": "Nghị định 142/2026/NĐ-CP",
+        "corpus_name": "Vietnam AI Decree",
+        "query_variant": "original",
+        "query_text": "q",
+        "query_language": "vi",
+        "query_rank": rank,
+    }
+
+
+class _FakeDriver:
+    def online_vector_indexes(self) -> dict[str, str]:
+        return {"legal_embedding_index": "ONLINE"}
+
+    def vector_search(self, **kwargs) -> list[dict]:
+        return [
+            _canned_row(
+                "142-2026-nd-cp:unit:001",
+                "Khoản 1 Điều 15 142/2026/NĐ-CP",
+                "Nhà cung cấp hệ thống AI rủi ro cao phải quản lý rủi ro.",
+                0.91,
+                1,
+            ),
+            _canned_row(
+                "142-2026-nd-cp:unit:002",
+                "Khoản 2 Điều 15 142/2026/NĐ-CP",
+                "Bên triển khai phải đánh giá sự phù hợp định kỳ.",
+                0.83,
+                2,
+            ),
+            _canned_row(
+                "142-2026-nd-cp:unit:003",
+                "Điều 16 142/2026/NĐ-CP",
+                "Trách nhiệm minh bạch với người dùng.",
+                0.70,
+                3,
+            ),
+        ]
+
+    def expand_context(self, **kwargs) -> list[dict]:
+        return []
+
+    def connect(self) -> None:  # pragma: no cover - trivial
+        pass
+
+    def close(self) -> None:  # pragma: no cover - trivial
+        pass
+
+
+# --- Neo4jRetriever.search end-to-end (mocked) -------------------------------
+
+def test_search_returns_articles_from_canned_rows():
+    config = Neo4jConfig(
+        uri="x", username="u", password="p",
+        dual_query=False, rerank=False, law="vn",
+    )
+    retriever = Neo4jRetriever(
+        config=config,
+        embedder=_FakeEmbedder(),
+        driver=_FakeDriver(),
+    )
+    # Driver is injected, so mark it connected to skip real connectivity.
+    retriever._connected = True
+
+    articles = retriever.search("Trách nhiệm của nhà cung cấp hệ thống AI?", k=2)
+
+    assert isinstance(articles, list)
+    assert len(articles) == 2
+    assert all(isinstance(a, Article) for a in articles)
+    # Top hit (highest fusion/vector score) should be Khoản 1 Điều 15.
+    assert articles[0].ref == "Khoản 1 Điều 15 142/2026/NĐ-CP"
+    assert "rủi ro" in articles[0].snippet
+    assert articles[1].ref == "Khoản 2 Điều 15 142/2026/NĐ-CP"
+
+
+def test_search_raises_when_no_index_online():
+    class _OfflineDriver(_FakeDriver):
+        def online_vector_indexes(self) -> dict[str, str]:
+            return {"legal_embedding_index": "POPULATING"}
+
+    config = Neo4jConfig(uri="x", username="u", password="p", dual_query=False, rerank=False, law="vn")
+    retriever = Neo4jRetriever(config=config, embedder=_FakeEmbedder(), driver=_OfflineDriver())
+    retriever._connected = True
+
+    with pytest.raises(RuntimeError, match="ONLINE"):
+        retriever.search("bất kỳ câu hỏi nào", k=2)
+
+
+# --- pure RRF math -----------------------------------------------------------
+
+def test_fuse_hits_accumulates_rrf_contributions():
+    rrf_k = 60
+    # Same node id appears for two query variants at ranks 1 and 3.
+    rows = [
+        {"id": "n1", "score": 0.9, "query_rank": 1, "query_variant": "original"},
+        {"id": "n1", "score": 0.7, "query_rank": 3, "query_variant": "translated"},
+        {"id": "n2", "score": 0.8, "query_rank": 2, "query_variant": "original"},
+    ]
+
+    fused = fuse_hits(rows, rrf_k=rrf_k)
+    by_id = {row["id"]: row for row in fused}
+
+    expected_n1 = 1.0 / (rrf_k + 1) + 1.0 / (rrf_k + 3)
+    assert by_id["n1"]["fusion_score"] == pytest.approx(expected_n1)
+    assert by_id["n2"]["fusion_score"] == pytest.approx(1.0 / (rrf_k + 2))
+    # n1 (two contributions) outranks n2 (one) -> sorted first.
+    assert fused[0]["id"] == "n1"
+    # Best raw score is preserved across the merge.
+    assert by_id["n1"]["score"] == pytest.approx(0.9)

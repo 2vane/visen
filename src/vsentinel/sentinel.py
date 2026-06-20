@@ -37,6 +37,7 @@ class Sentinel:
         config: SentinelConfig | None = None,
         classifier: Classifier | None = None,
         chatbot: Chatbot | None = None,
+        retriever=None,
     ):
         self.config = config or SentinelConfig()
         self.classifier: Classifier = classifier or OllamaClassifier(
@@ -45,7 +46,9 @@ class Sentinel:
         self.chatbot: Chatbot = chatbot or OllamaChatbot(
             model=self.config.chat_model, base_url=self.config.ollama_url
         )
-        self._retriever = Retriever(articles_path=self.config.articles_path)
+        # Any object with `.search(query, k) -> list[Article]` works here; the
+        # packaged default is offline BM25, swap in Neo4jRetriever for the graph.
+        self._retriever = retriever or Retriever(articles_path=self.config.articles_path)
 
     def check_input(self, message: str) -> DecisionTrace:
         """Stages 0-2: normalize, score, classify, decide. No generation."""

@@ -1,6 +1,6 @@
 # V-Sentinel — Architecture, Models & Data Flow
 
-> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (46 tests passing).
+> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (52 tests passing).
 
 ## 1. What it is
 A guardrail layer between the user and a Vietnamese chatbot. Every user turn passes through a 5-stage pipeline that decides **ALLOW / REFRAME / BLOCK**, then (for non-blocked turns) generates an answer and re-checks the output. Every decision carries a `DecisionTrace` shown in the UI panel.
@@ -13,7 +13,8 @@ A guardrail layer between the user and a Vietnamese chatbot. Every user turn pas
 | **Safety classifier** | `qwen3guard` / Qwen3Guard-Gen (Ollama) | Stage 1 + Stage 4: returns `safe` / `controversial` / `unsafe` | On error/garbage → `controversial` (fail-safe, never silent `safe`) |
 | **Jailbreak rules** | regex/keyword (no model) | Stage 1 **backbone** — decides even if Ollama is offline | Always available |
 | **PII** | regex + context-gating (no model) | Stage 2 + Stage 4 (CCCD/CMND/phone/MST/email) | Deterministic |
-| **Legal retrieval** | BM25 (`rank_bm25`, no model) | Stage 2 — cites the matching decree article | Deterministic |
+| **Legal retrieval** | BM25 (`rank_bm25`, no model) — *default* | Stage 2 — cites the matching decree article | Deterministic |
+| **Legal retrieval (optional)** | `bge-m3` + Neo4j AuraDB + cross-encoder rerank | Stage 2 — real reranked citations over ND-142 + FERPA + COPPA graph | Injected via `Sentinel(retriever=Neo4jRetriever())` |
 
 **Key design principle:** deterministic layers (rules, PII, BM25) are the backbone; the two LLMs are a *second opinion*. Attacks are blocked even with no LLM running.
 
@@ -126,7 +127,11 @@ src/vsentinel/
   guard_client.py  Stage 1/4 Qwen3Guard (Ollama)
   ollama_client.py Qwen2.5 transport
   pii.py           Stage 2/4 PII
-  retrieve.py      Stage 2 BM25
+  retrieve.py      Stage 2 BM25 (default retriever)
+  retrievers/      optional Neo4j backend (bge-m3 + AuraDB + rerank, lazy heavy deps)
+    neo4j_retriever.py  Neo4jRetriever facade (.search → list[Article])
+    neo4j_config.py     Neo4jConfig (env creds) + corpus/router tables
+    embedder.py · translator.py · reranker.py · driver.py · fusion.py · text_utils.py
   policy.py        Stage 2 decision
   generate.py      Stage 3 (Qwen2.5)
   verify.py        Stage 4
@@ -148,7 +153,8 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
   - the "Policy Leverage" report + demo video
 
 ## 8. Honest gaps to discuss
-- **Decree articles are seed placeholders** — the 97-page scan needs OCR before real citations appear.
+- **Default BM25 citations are seed placeholders** — but the optional `Neo4jRetriever` now serves *real* reranked citations over the teammate's ND-142 + FERPA + COPPA knowledge graph (`bge-m3` embeddings in AuraDB). Verified live. Remaining: decide whether Neo4j should back the demo, or fold its articles into the offline BM25 seed so the default also cites real text.
+- **AuraDB Cypher uses `db.index.vector.queryNodes`**, which AuraDB now flags as deprecated in favor of `SEARCH` — works today, worth migrating.
 - **Single-message scope** — no multi-turn/crescendo attack detection (deliberate YAGNI for the MVP).
 - **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally.
 - Eval numbers need the real MultiJail-vi / XSTest-vi files to be meaningful.
@@ -160,6 +166,9 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 ollama pull qwen2.5 && ollama pull qwen3guard
 uv run uvicorn api.main:app --port 8000      # http://localhost:8000
 
-uv run pytest -q                              # 34 tests
+uv run pytest -q                              # 52 tests
+
+# optional: real reranked citations over the Neo4j legal graph
+uv sync --extra neo4j && cp .env.example .env # then fill in NEO4J_* creds
 uv run python -m eval.run_eval                # metrics
 ```

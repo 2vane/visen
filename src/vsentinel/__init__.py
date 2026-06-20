@@ -24,4 +24,19 @@ __all__ = [
     "OutputCheck",
     "guard",
     "wrap",
+    "Neo4jRetriever",
+    "Neo4jConfig",
 ]
+
+
+def __getattr__(name: str):
+    """Lazily expose the optional Neo4j backend.
+
+    Kept out of the eager imports so ``import vsentinel`` never requires the
+    heavy ``[neo4j]`` extra (torch / sentence-transformers / neo4j driver).
+    """
+    if name in ("Neo4jRetriever", "Neo4jConfig"):
+        from vsentinel import retrievers
+
+        return getattr(retrievers, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
