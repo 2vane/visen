@@ -20,3 +20,9 @@ def test_fold_diacritics():
 def test_collapses_excess_spacing():
     out, flags = normalize("b o   q u a")
     assert "excess_spacing" in flags
+    assert "bo qua" in out
+
+def test_plain_number_not_leet_decoded():
+    out, flags = normalize("phòng 305 mở cửa")
+    assert "305" in out
+    assert "leetspeak" not in flags

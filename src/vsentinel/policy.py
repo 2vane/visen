@@ -13,8 +13,10 @@ def _load_templates() -> dict:
     return yaml.safe_load(_TEMPLATES.read_text(encoding="utf-8"))
 
 def categorize(rule_score: float, rules: list[RuleHit], guard_severity: str) -> str:
-    if rule_score >= 0.8 or guard_severity == "unsafe":
+    if rule_score >= 0.8:
         return "attack"
+    if guard_severity == "unsafe":
+        return "illegal"
     if guard_severity == "controversial":
         return "sensitive_legal"
     return "benign"
@@ -23,8 +25,9 @@ def decide(category: str, guard_severity: str, retriever) -> tuple[str, PolicyIn
     rules = _load_policy()
     rule = next((r for r in rules if r["category"] == category), rules[-1])
     citations = [Citation(**c) for c in rule.get("citations", [])]
-    for art in retriever.search(rule.get("reason", category), k=1):
-        citations.append(Citation(source="ND142/2026", ref=art.ref, text=art.snippet[:80]))
+    if rule["action"] != "ALLOW":
+        for art in retriever.search(rule.get("reason", category), k=1):
+            citations.append(Citation(source="ND142/2026", ref=art.ref, text=art.snippet[:80]))
     policy = PolicyInfo(reason=rule["reason"], citations=citations)
     directive = ""
     if rule["action"] == "REFRAME":

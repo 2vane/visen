@@ -33,6 +33,7 @@ function render(t){
  add('Rules fired',(t.risk.rules_fired||[]).map(h=>h.id+' ['+h.owasp_tag+']').join(', ')||'none');
  add('Obfuscation',(t.obfuscation_flags||[]).join(', ')||'none');
  add('Citations',(t.policy.citations||[]).map(c=>c.source+' '+c.ref).join('; ')||'none');
+ if(t.output_check)add('Output check',t.output_check.verdict+(t.output_check.redactions&&t.output_check.redactions.length?(' ['+t.output_check.redactions.join(',')+']'):''));
  if(t.pii&&t.pii.length)add('PII',t.pii.map(p=>p.type).join(', '));
  add('Latency (ms)',t.latency_ms);
 }

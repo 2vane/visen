@@ -15,7 +15,13 @@ def fold_diacritics(text: str) -> str:
 
 
 def _decode_leet(text: str) -> str:
-    return "".join(LEET.get(ch, ch) for ch in text)
+    out = []
+    for tok in text.split(" "):
+        if any(c.isalpha() for c in tok) and any(c in LEET for c in tok):
+            out.append("".join(LEET.get(c, c) for c in tok))
+        else:
+            out.append(tok)
+    return " ".join(out)
 
 
 def normalize(text: str) -> tuple[str, list[str]]:
@@ -27,11 +33,9 @@ def normalize(text: str) -> tuple[str, list[str]]:
         for z in ZERO_WIDTH:
             work = work.replace(z, "")
 
-    # Detect excess spacing: 4+ single characters separated by spaces, or 2+ spaces between words
-    if re.search(r"\w\s\w\s\w\s\w", work) or re.search(r"\s{2,}", work):
+    if re.search(r"(?:\b\w (?=\w\b))+\w\b", work) or re.search(r"\b\w(?: \w){2,}\b", work):
         flags.append("excess_spacing")
-        work = re.sub(r"(?<=\w)\s+(?=\w)", lambda m: " " if len(m.group()) == 1 else "", work)
-        work = re.sub(r"\b(\w)\s(?=\w\b)", r"\1", work)
+        work = re.sub(r"\b\w(?: \w)+\b", lambda m: m.group(0).replace(" ", ""), work)
 
     leet_decoded = _decode_leet(work)
     if leet_decoded != work and re.search(r"[a-zA-Z]", work):

@@ -37,6 +37,8 @@ def run(user_text: str) -> DecisionTrace:
     reply = answer(user_text, directive, articles)
     check, final_text = check_output(reply)
     trace.output_check = check
+    if check.verdict == "BLOCK":
+        trace.decision = "BLOCK"
     trace.final_message = final_text
     trace.latency_ms = int((time.perf_counter() - t0) * 1000)
     return trace

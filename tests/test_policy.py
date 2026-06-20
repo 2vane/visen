@@ -19,3 +19,16 @@ def test_decide_sensitive_reframes_with_directive():
     decision, policy, directive = decide("sensitive_legal", "controversial", R)
     assert decision == "REFRAME"
     assert "trách nhiệm" in directive
+
+def test_categorize_illegal_from_unsafe():
+    assert categorize(0.0, [], "unsafe") == "illegal"
+
+def test_decide_illegal_blocks_with_nd142_citation():
+    decision, policy, directive = decide("illegal", "unsafe", R)
+    assert decision == "BLOCK"
+    assert any(c.source == "ND142/2026" for c in policy.citations)
+
+def test_decide_benign_no_citations():
+    decision, policy, directive = decide("benign", "safe", R)
+    assert decision == "ALLOW"
+    assert policy.citations == []
