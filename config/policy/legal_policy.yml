@@ -1,0 +1,27 @@
+- id: security_attack
+  category: attack
+  action: BLOCK
+  reason: "Phát hiện ý đồ tấn công/bẻ khóa hệ thống."
+  refusal_vi: "Yêu cầu của bạn có dấu hiệu tấn công hệ thống và đã bị từ chối."
+  citations:
+    - { source: OWASP, ref: "LLM01", text: "Prompt Injection" }
+    - { source: ND142/2026, ref: "Điều 5", text: "Phân loại hệ thống AI theo mức độ rủi ro" }
+- id: illegal_content
+  category: illegal
+  action: BLOCK
+  reason: "Nội dung vi phạm pháp luật Việt Nam."
+  refusal_vi: "Nội dung này vi phạm quy định pháp luật và không thể được hỗ trợ."
+  citations:
+    - { source: ND142/2026, ref: "Điều 5", text: "Đánh giá sự phù hợp hệ thống AI" }
+- id: sensitive_but_legal
+  category: sensitive_legal
+  action: REFRAME
+  reason: "Câu hỏi nhạy cảm nhưng hợp pháp (y tế/pháp luật) — trả lời có trách nhiệm thay vì từ chối."
+  reframe_template: responsible_answer
+  citations:
+    - { source: GDPR, ref: "Art. 9", text: "Special-category (health) data" }
+- id: benign
+  category: benign
+  action: ALLOW
+  reason: "Không phát hiện rủi ro."
+  citations: []
