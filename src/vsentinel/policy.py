@@ -6,6 +6,10 @@ from vsentinel.schema import RuleHit, PolicyInfo, Citation
 _POLICY = policy_file("legal_policy.yml")
 _TEMPLATES = policy_file("reframe_templates.yml")
 
+# Sources a retriever may tag on an Article; anything else falls back to the
+# decree so a Citation never violates its source enum.
+_ALLOWED_SOURCES = {"ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA"}
+
 def _load_policy() -> list[dict]:
     return yaml.safe_load(_POLICY.read_text(encoding="utf-8"))
 
@@ -27,7 +31,10 @@ def decide(category: str, guard_severity: str, retriever) -> tuple[str, PolicyIn
     citations = [Citation(**c) for c in rule.get("citations", [])]
     if rule["action"] != "ALLOW":
         for art in retriever.search(rule.get("reason", category), k=1):
-            citations.append(Citation(source="ND142/2026", ref=art.ref, text=art.snippet[:80]))
+            src = getattr(art, "source", "") or "ND142/2026"
+            if src not in _ALLOWED_SOURCES:
+                src = "ND142/2026"
+            citations.append(Citation(source=src, ref=art.ref, text=art.snippet[:80]))
     policy = PolicyInfo(reason=rule["reason"], citations=citations)
     directive = ""
     if rule["action"] == "REFRAME":

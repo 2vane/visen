@@ -156,7 +156,8 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 - **Default BM25 citations are seed placeholders** — but the optional `Neo4jRetriever` now serves *real* reranked citations over the teammate's ND-142 + FERPA + COPPA knowledge graph (`bge-m3` embeddings in AuraDB). Verified live. Remaining: decide whether Neo4j should back the demo, or fold its articles into the offline BM25 seed so the default also cites real text.
 - **AuraDB Cypher uses `db.index.vector.queryNodes`**, which AuraDB now flags as deprecated in favor of `SEARCH` — works today, worth migrating.
 - **Single-message scope** — no multi-turn/crescendo attack detection (deliberate YAGNI for the MVP).
-- **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally.
+- **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally. (Note: a spurious rule hit shadows `illegal` toward `attack`; keep rule precision high — see the `persona_dan`/"hướng dẫn" fix.)
+- **Cross-law retrieval relevance** — the graph holds AI-decree + FERPA + COPPA law, so a health REFRAME can surface US privacy citations that are correctly *labeled* but topically off. Mitigated by enabling rerank and the keyword router; benign turns no longer retrieve at all. Consider a `min_score` floor and tightening `law` routing for the demo.
 - Eval numbers need the real MultiJail-vi / XSTest-vi files to be meaningful.
 
 ## 9. Run

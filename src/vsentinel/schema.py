@@ -12,7 +12,7 @@ class RuleHit(BaseModel):
     owasp_tag: str = ""
 
 class Citation(BaseModel):
-    source: Literal["ND142/2026", "PDPD", "GDPR", "OWASP"]
+    source: Literal["ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA"]
     ref: str
     text: str = ""
 
@@ -24,6 +24,9 @@ class PiiHit(BaseModel):
 class Article(BaseModel):
     ref: str
     snippet: str = ""
+    # Legal source/jurisdiction a retriever can tag (e.g. "ND142/2026", "FERPA",
+    # "COPPA"). Empty => caller falls back to the default decree source.
+    source: str = ""
 
 class RiskInfo(BaseModel):
     score: float = 0.0

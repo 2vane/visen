@@ -182,9 +182,14 @@ class Neo4jRetriever:
 
         return [self._to_article(row) for row in ranked[:k]]
 
+    # Maps the internal corpus key to the Citation.source label so downstream
+    # policy citations are attributed to the right law, not a hardcoded decree.
+    _CORPUS_SOURCE = {"vn": "ND142/2026", "ferpa": "FERPA", "coppa": "COPPA"}
+
     def _to_article(self, row: dict) -> Article:
         ref = clean_text(row.get("citation")) or clean_text(row.get("document_citation"))
-        return Article(ref=ref, snippet=clean_text(row.get("text")))
+        source = self._CORPUS_SOURCE.get(row.get("corpus"), "")
+        return Article(ref=ref, snippet=clean_text(row.get("text")), source=source)
 
     # -- lifecycle ----------------------------------------------------------
 

@@ -53,6 +53,24 @@ def test_benign_input_allows_and_returns_chatbot_reply():
     assert trace.final_message == "Bệnh viện mở cửa 7h"
 
 
+def test_benign_does_not_retrieve_articles():
+    """Relevance gate: benign ALLOW turns attach no (irrelevant) legal articles."""
+    s = Sentinel(classifier=_safe_classifier, chatbot=_fake_chatbot)
+    trace = s.check_input("Giờ làm việc của bệnh viện?")
+
+    assert trace.decision == "ALLOW"
+    assert trace.retrieved_articles == []
+
+
+def test_reframe_does_retrieve_articles():
+    """REFRAME (sensitive-legal) turns still receive grounding articles."""
+    s = Sentinel(classifier=_controversial_classifier, chatbot=_fake_chatbot)
+    trace = s.check_input("Tôi bị tiểu đường nên ăn gì?")
+
+    assert trace.decision == "REFRAME"
+    assert len(trace.retrieved_articles) >= 1
+
+
 # Test 3 ─────────────────────────────────────────────────────────────────────
 
 def test_controversial_input_reframes():

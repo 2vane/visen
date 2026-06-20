@@ -143,6 +143,29 @@ def test_search_returns_articles_from_canned_rows():
     assert articles[0].ref == "Khoản 1 Điều 15 142/2026/NĐ-CP"
     assert "rủi ro" in articles[0].snippet
     assert articles[1].ref == "Khoản 2 Điều 15 142/2026/NĐ-CP"
+    # Source is tagged from the corpus so policy citations attribute the right law.
+    assert articles[0].source == "ND142/2026"
+
+
+def test_search_tags_coppa_source():
+    """A COPPA-corpus hit is tagged source='COPPA', not the default decree."""
+    class _CoppaDriver(_FakeDriver):
+        def online_vector_indexes(self):
+            return {"coppa_embedding_index": "ONLINE"}
+
+        def vector_search(self, **kwargs):
+            row = _canned_row("coppa:001", "16 CFR § 312.5", "Verifiable parental consent.", 0.9, 1)
+            row.update(corpus="coppa", index_name="coppa_embedding_index",
+                       document_id="us-coppa-16-cfr-part-312")
+            return [row]
+
+    config = Neo4jConfig(uri="x", username="u", password="p",
+                         dual_query=False, rerank=False, law="coppa")
+    retriever = Neo4jRetriever(config=config, embedder=_FakeEmbedder(), driver=_CoppaDriver())
+    retriever._connected = True
+
+    articles = retriever.search("verifiable parental consent under 13", k=1)
+    assert articles[0].source == "COPPA"
 
 
 def test_search_raises_when_no_index_online():

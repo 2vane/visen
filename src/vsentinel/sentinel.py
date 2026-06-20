@@ -70,9 +70,11 @@ class Sentinel:
         )
         if decision == "BLOCK":
             trace.final_message = policy.reason or "Yêu cầu đã bị từ chối."
-        else:
+        elif decision == "REFRAME":
+            # Only sensitive-legal turns need grounding articles; benign turns
+            # would otherwise attach low-relevance citations (and pay for a search).
             trace.retrieved_articles = self._retriever.search(norm, k=self.config.retrieve_k)
-            trace.used_reframed_prompt = decision == "REFRAME"
+            trace.used_reframed_prompt = True
         return trace
 
     def check_output(self, answer: str) -> tuple[OutputCheck, str]:
