@@ -60,43 +60,100 @@ user message
 - **REFRAMED** — sensitive-but-legal (health/law), answered helpfully instead of refused
 - plus the output-check verdict (ALLOW / REDACT / BLOCK) for the generated answer
 
-## 5. Component / file map
+## 5. Framework / public API
+
+V-Sentinel is an importable Python package. `from vsentinel import Sentinel` is
+the primary entry point; the FastAPI app and NeMo config are example consumers.
+
+### `Sentinel` facade (`sentinel.py`)
+
+The central class. Accepts optional `config`, `classifier`, and `chatbot`
+callables. Exposes three methods: `run(message)`, `check_input(message)`, and
+`check_output(answer)` — all returning typed Pydantic models.
+
+### `Classifier` / `Chatbot` protocols (`backends.py`)
+
+Structural protocols (no inheritance required). Any callable that matches the
+signature is accepted:
+
+- `Classifier`: `(text: str, role: str = "user") -> "safe" | "controversial" | "unsafe"`
+- `Chatbot`: `(user_text: str, safety_directive: str, articles: list) -> str`
+
+`OllamaClassifier` and `OllamaChatbot` are the packaged defaults; inject any
+third-party LLM SDK by providing callables that satisfy the same signatures.
+
+### `SentinelConfig` (`config.py`)
+
+Dataclass with sane defaults (`ollama_url`, `chat_model`, `guard_model`,
+`attack_threshold`, `retrieve_k`, `articles_path`). The `ollama_url`,
+`chat_model`, and `guard_model` fields are ignored when custom backends are
+injected.
+
+### Packaged resources (`resources.py`, `resources/`)
+
+Policy YAMLs and decree data are bundled inside the package and resolved via
+`importlib.resources` so the library works from any install location. Helper
+functions `policy_file(name)` and `data_file(name)` return `Path` objects.
+
+### Decorators / wrappers (`integrations.py`)
+
+`wrap(chat_fn, sentinel=None)` and `@guard(sentinel=None)` add guardrails to
+any `f(message) -> reply` function without modifying its signature.
+
+### Example consumers
+
+- `api/main.py` — FastAPI web app (demo UI + `/chat` endpoint)
+- `config/config.yml` + `config/rails/flows.co` — NeMo Guardrails wiring (optional)
+- `examples/` — runnable standalone examples (see README)
+
+## 6. Component / file map
 
 ```
 src/vsentinel/
+  __init__.py      public API surface (Sentinel, SentinelConfig, guard, wrap, …)
+  sentinel.py      Sentinel facade — the main importable class
+  backends.py      Classifier / Chatbot protocols + OllamaClassifier / OllamaChatbot
+  config.py        SentinelConfig dataclass
+  integrations.py  wrap() / @guard() helpers
+  resources.py     importlib.resources helpers (policy_file, data_file)
+  resources/
+    policy/        jailbreak_patterns.yml, legal_policy.yml, pii_recognizers.yml,
+                   reframe_templates.yml
+    data/          decree_articles.json
   schema.py        DecisionTrace + sub-models (shared contract)
   normalize.py     Stage 0
-  detect.py        Stage 1 rules        ← config/policy/jailbreak_patterns.yml
+  detect.py        Stage 1 rules
   guard_client.py  Stage 1/4 Qwen3Guard (Ollama)
   ollama_client.py Qwen2.5 transport
-  pii.py           Stage 2/4 PII        ← config/policy/pii_recognizers.yml
-  retrieve.py      Stage 2 BM25         ← data/decree_articles.json
-  policy.py        Stage 2 decision     ← config/policy/legal_policy.yml + reframe_templates.yml
+  pii.py           Stage 2/4 PII
+  retrieve.py      Stage 2 BM25
+  policy.py        Stage 2 decision
   generate.py      Stage 3 (Qwen2.5)
   verify.py        Stage 4
   pipeline.py      orchestrates 0→5
-  rails_actions.py NeMo action
-api/main.py        POST /chat, GET /
+  rails_actions.py NeMo action (example consumer)
+api/main.py        POST /chat, GET /  ← example consumer
 web/index.html     chat + guardrail panel
+examples/          quickstart.py · offline_fake_backend.py · custom_backend.py · decorator.py
 eval/              run_eval.py · multijail_vi.py · xstest_vi.json
-config/config.yml + config/rails/flows.co   NeMo wiring
+config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 ```
 
-## 6. Who owns what (2-person split)
+## 7. Who owns what (2-person split)
 - **Build (done):** the pipeline, API, UI, eval harness, NeMo wiring.
-- **Teammate (data + legal, drops into config — no code):**
-  - `config/policy/legal_policy.yml` → exact `Điều/Khoản` from ND-142/2026
-  - `data/decree_articles.json` → OCR'd decree articles (for BM25 citation)
+- **Teammate (data + legal, edits packaged resources — no code):**
+  - `src/vsentinel/resources/policy/legal_policy.yml` → exact `Điều/Khoản` from ND-142/2026
+  - `src/vsentinel/resources/data/decree_articles.json` → OCR'd decree articles (for BM25 citation)
   - `eval/multijail_vi.json` (jailbreak set) + `eval/xstest_vi.json` (over-refusal set)
   - the "Policy Leverage" report + demo video
 
-## 7. Honest gaps to discuss
+## 8. Honest gaps to discuss
 - **Decree articles are seed placeholders** — the 97-page scan needs OCR before real citations appear.
 - **Single-message scope** — no multi-turn/crescendo attack detection (deliberate YAGNI for the MVP).
 - **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally.
 - Eval numbers need the real MultiJail-vi / XSTest-vi files to be meaningful.
 
-## 8. Run
+## 9. Run
 
 ```bash
 # live demo (needs Ollama)
