@@ -3,10 +3,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from vsentinel.pipeline import run
+from vsentinel import Sentinel
 
 app = FastAPI(title="V-Sentinel")
 _WEB = Path(__file__).resolve().parents[1] / "web" / "index.html"
+
+sentinel = Sentinel()
 
 
 class ChatIn(BaseModel):
@@ -15,7 +17,7 @@ class ChatIn(BaseModel):
 
 @app.post("/chat")
 def chat(body: ChatIn):
-    return run(body.message)
+    return sentinel.run(body.message)
 
 
 @app.get("/", response_class=HTMLResponse)
