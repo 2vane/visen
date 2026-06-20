@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>V-Sentinel</title>
+<style>
+ body{font-family:system-ui;margin:0;display:flex;height:100vh}
+ #chat{flex:1;display:flex;flex-direction:column;border-right:1px solid #ddd}
+ #log{flex:1;overflow:auto;padding:16px} #bar{display:flex;padding:12px;gap:8px}
+ #msg{flex:1;padding:8px} #panel{width:380px;padding:16px;overflow:auto;background:#fafafa}
+ .badge{padding:2px 8px;border-radius:4px;color:#fff;font-weight:600}
+ .ALLOW{background:#2e7d32}.REFRAME{background:#f9a825}.BLOCK{background:#c62828}
+ .u{color:#1565c0}.a{color:#333;margin-bottom:12px}
+</style></head><body>
+<div id="chat"><div id="log"></div>
+ <div id="bar"><input id="msg" placeholder="Nhập câu hỏi..."><button onclick="send()">Gửi</button></div></div>
+<div id="panel"><h3>Guardrail Trace</h3><div id="trace">Chưa có dữ liệu.</div></div>
+<script>
+const log=document.getElementById('log'),trace=document.getElementById('trace');
+function line(cls,txt){const d=document.createElement('div');d.className=cls;d.textContent=txt;log.appendChild(d);log.scrollTop=log.scrollHeight;}
+async function send(){
+ const m=document.getElementById('msg');const text=m.value.trim();if(!text)return;m.value='';
+ line('u','🧑 '+text);
+ const r=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+ const t=await r.json();
+ line('a','🤖 '+t.final_message);
+ render(t);
+}
+function render(t){
+ trace.innerHTML='';
+ const b=document.createElement('span');b.className='badge '+t.decision;b.textContent=t.decision;trace.appendChild(b);
+ const add=(label,val)=>{const p=document.createElement('p');p.textContent=label+': '+val;trace.appendChild(p);};
+ add('Risk score',t.risk.score.toFixed(2));
+ add('Category',t.risk.category);
+ add('Guard severity',t.risk.guard_severity);
+ add('Rules fired',(t.risk.rules_fired||[]).map(h=>h.id+' ['+h.owasp_tag+']').join(', ')||'none');
+ add('Obfuscation',(t.obfuscation_flags||[]).join(', ')||'none');
+ add('Citations',(t.policy.citations||[]).map(c=>c.source+' '+c.ref).join('; ')||'none');
+ if(t.pii&&t.pii.length)add('PII',t.pii.map(p=>p.type).join(', '));
+ add('Latency (ms)',t.latency_ms);
+}
+document.getElementById('msg').addEventListener('keydown',e=>{if(e.key==='Enter')send();});
+</script></body></html>
