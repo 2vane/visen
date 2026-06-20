@@ -12,8 +12,10 @@ Run:
 from vsentinel import Sentinel, SentinelConfig, guard
 
 # --- minimal fake backends (no Ollama needed) ----------------------------------
+# Avoid bare "bệnh" — it matches "bệnh viện" (hospital) and would mis-flag the
+# benign "hospital hours" question below as sensitive.
 _JAILBREAK_KEYWORDS = {"ignore", "bypass", "bỏ qua", "hack", "override", "forget"}
-_SENSITIVE_KEYWORDS = {"tiểu đường", "ung thư", "hiv", "thuốc", "bệnh"}
+_SENSITIVE_KEYWORDS = {"tiểu đường", "ung thư", "hiv", "thuốc", "bệnh tình", "triệu chứng"}
 
 
 def _fake_classifier(text: str, role: str = "user") -> str:

@@ -1,6 +1,6 @@
 # V-Sentinel — Architecture, Models & Data Flow
 
-> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (34 tests passing).
+> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (46 tests passing).
 
 ## 1. What it is
 A guardrail layer between the user and a Vietnamese chatbot. Every user turn passes through a 5-stage pipeline that decides **ALLOW / REFRAME / BLOCK**, then (for non-blocked turns) generates an answer and re-checks the output. Every decision carries a `DecisionTrace` shown in the UI panel.

@@ -12,8 +12,10 @@ from vsentinel import Sentinel, SentinelConfig
 
 # --- fake classifier ---------------------------------------------------
 # Must satisfy the Classifier protocol: (text, role) -> "safe"|"controversial"|"unsafe"
+# Word-specific keywords: avoid bare "bệnh" — it matches "bệnh viện" (hospital),
+# which would wrongly flag a benign "hospital hours" question as sensitive.
 _JAILBREAK_KEYWORDS = {"ignore", "bypass", "bỏ qua", "hack", "override", "forget"}
-_SENSITIVE_KEYWORDS = {"tiểu đường", "ung thư", "hiv", "thuốc", "bệnh"}
+_SENSITIVE_KEYWORDS = {"tiểu đường", "ung thư", "hiv", "thuốc", "bệnh tình", "triệu chứng"}
 
 
 def fake_classifier(text: str, role: str = "user") -> str:

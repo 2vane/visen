@@ -19,6 +19,11 @@ def wrap(chat_fn: Chat, sentinel: Sentinel | None = None) -> Chat:
     Blocked input returns the refusal message without ever calling ``chat_fn``.
     For allowed/reframed input, ``chat_fn`` is called and its reply is screened
     (PII redacted / unsafe blocked) before being returned.
+
+    Note: this simple ``f(message) -> reply`` form does not forward the REFRAME
+    ``safety_directive`` or retrieved articles to ``chat_fn`` — a REFRAME here
+    behaves like ALLOW-without-directive. If you need the directive/context, use
+    ``Sentinel.check_input`` / ``check_output`` directly instead of ``wrap``.
     """
     s = sentinel or Sentinel()
 
