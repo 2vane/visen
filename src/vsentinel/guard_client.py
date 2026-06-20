@@ -9,9 +9,20 @@ _PROMPT = (
 )
 
 
-def classify(text: str, role: Literal["user", "assistant"] = "user", timeout: float = 15) -> str:
+def classify(
+    text: str,
+    role: Literal["user", "assistant"] = "user",
+    timeout: float = 15,
+    model: str = GUARD_MODEL,
+    base_url: str | None = None,
+) -> str:
     try:
-        out = chat(GUARD_MODEL, [{"role": "user", "content": _PROMPT.format(role=role, text=text)}], timeout=timeout)
+        out = chat(
+            model,
+            [{"role": "user", "content": _PROMPT.format(role=role, text=text)}],
+            timeout=timeout,
+            base_url=base_url,
+        )
     except OllamaError:
         return "controversial"
     low = out.lower()

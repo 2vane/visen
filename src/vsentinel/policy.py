@@ -12,8 +12,8 @@ def _load_policy() -> list[dict]:
 def _load_templates() -> dict:
     return yaml.safe_load(_TEMPLATES.read_text(encoding="utf-8"))
 
-def categorize(rule_score: float, rules: list[RuleHit], guard_severity: str) -> str:
-    if rule_score >= 0.8:
+def categorize(rule_score: float, rules: list[RuleHit], guard_severity: str, attack_threshold: float = 0.8) -> str:
+    if rule_score >= attack_threshold:
         return "attack"
     if guard_severity == "unsafe":
         return "illegal"

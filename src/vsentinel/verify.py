@@ -6,8 +6,9 @@ from vsentinel.schema import OutputCheck
 _BLOCKED_MSG = "Phản hồi đã bị chặn do vi phạm chính sách an toàn."
 
 
-def check_output(answer: str) -> tuple[OutputCheck, str]:
-    if classify(answer, role="assistant") == "unsafe":
+def check_output(answer: str, classifier=None) -> tuple[OutputCheck, str]:
+    clf = classifier or classify
+    if clf(answer, role="assistant") == "unsafe":
         return OutputCheck(verdict="BLOCK"), _BLOCKED_MSG
     hits = detect_pii(answer)
     if hits:

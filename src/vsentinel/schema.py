@@ -46,6 +46,7 @@ class DecisionTrace(BaseModel):
     risk: RiskInfo = Field(default_factory=RiskInfo)
     decision: Decision = "ALLOW"
     policy: PolicyInfo = Field(default_factory=PolicyInfo)
+    safety_directive: str = ""
     pii: list[PiiHit] = Field(default_factory=list)
     used_reframed_prompt: bool = False
     retrieved_articles: list[Article] = Field(default_factory=list)
