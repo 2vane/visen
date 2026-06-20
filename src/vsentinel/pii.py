@@ -1,10 +1,10 @@
 from __future__ import annotations
 import re
-from pathlib import Path
 import yaml
+from vsentinel.resources import policy_file
 from vsentinel.schema import PiiHit
 
-_DEFAULT = Path(__file__).resolve().parents[2] / "config" / "policy" / "pii_recognizers.yml"
+_DEFAULT = policy_file("pii_recognizers.yml")
 
 
 def _load() -> list[dict]:

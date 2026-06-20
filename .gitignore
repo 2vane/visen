@@ -36,3 +36,8 @@ htmlcov/
 # OCR scratch
 /tmp/visen_ocr/
 *.ocr.png
+
+# Build artifacts
+dist/
+build/
+*.whl

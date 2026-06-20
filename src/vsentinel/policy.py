@@ -1,10 +1,10 @@
 from __future__ import annotations
-from pathlib import Path
 import yaml
+from vsentinel.resources import policy_file
 from vsentinel.schema import RuleHit, PolicyInfo, Citation
 
-_POLICY = Path(__file__).resolve().parents[2] / "config" / "policy" / "legal_policy.yml"
-_TEMPLATES = Path(__file__).resolve().parents[2] / "config" / "policy" / "reframe_templates.yml"
+_POLICY = policy_file("legal_policy.yml")
+_TEMPLATES = policy_file("reframe_templates.yml")
 
 def _load_policy() -> list[dict]:
     return yaml.safe_load(_POLICY.read_text(encoding="utf-8"))

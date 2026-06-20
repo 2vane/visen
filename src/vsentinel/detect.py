@@ -6,9 +6,10 @@ from pathlib import Path
 import yaml
 
 from vsentinel.normalize import fold_diacritics
+from vsentinel.resources import policy_file
 from vsentinel.schema import RuleHit
 
-_DEFAULT = Path(__file__).resolve().parents[2] / "config" / "policy" / "jailbreak_patterns.yml"
+_DEFAULT = policy_file("jailbreak_patterns.yml")
 
 
 def load_patterns(path: str | None = None) -> list[dict]:

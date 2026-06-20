@@ -4,8 +4,9 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 from vsentinel.schema import Article
 from vsentinel.normalize import fold_diacritics
+from vsentinel.resources import data_file
 
-_DEFAULT = Path(__file__).resolve().parents[2] / "data" / "decree_articles.json"
+_DEFAULT = data_file("decree_articles.json")
 
 
 def _tok(text: str) -> list[str]:
