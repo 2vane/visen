@@ -1,0 +1,10 @@
+models:
+  - type: main
+    engine: ollama
+    model: qwen2.5
+    parameters:
+      base_url: http://localhost:11434
+rails:
+  input:
+    flows:
+      - vsentinel guard

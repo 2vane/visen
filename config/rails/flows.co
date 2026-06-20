@@ -1,0 +1,8 @@
+define flow vsentinel guard
+  $result = execute vsentinel_guard(user_message=$user_message)
+  if $result.decision == "BLOCK"
+    bot refuse
+    stop
+
+define bot refuse
+  "Yêu cầu của bạn đã bị hệ thống V-Sentinel từ chối."
