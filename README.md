@@ -156,9 +156,20 @@ with Neo4jRetriever() as retriever:           # closes the driver on exit
 `Neo4jRetriever` is a drop-in for the BM25 `Retriever` — same
 `search(query, k) -> list[Article]` contract — running corpus routing →
 bge-m3 vector search → RRF dual-query fusion → cross-encoder rerank. Heavy deps
-load lazily, so `import vsentinel` never requires them. Tune via `Neo4jConfig`
-(`dual_query`, `rerank`, `law`, `candidate_k`, …). **Never commit `.env`**; rotate
-the AuraDB password if it is ever exposed.
+load lazily, so `import vsentinel` never requires them. **Never commit `.env`**;
+rotate the AuraDB password if it is ever exposed.
+
+**Relevance tuning** (keeps US law out of Vietnamese answers):
+- `default_corpus="vn"` — an uncertain *Vietnamese* query routes to the VN decree
+  only; FERPA/COPPA are reached via their keywords or explicit `law="ferpa"`.
+- `min_reranker_score` — the cross-encoder scores relevant units ~0.7-1.0 and
+  off-topic ones ~0.0, so a floor (e.g. `0.3`) returns **no** citation rather than
+  a forced wrong one. The demo sets this via `VSENTINEL_MIN_RERANK` (default 0.3).
+
+```bash
+# run the web demo against the graph with the relevance floor:
+VSENTINEL_RETRIEVER=neo4j VSENTINEL_MIN_RERANK=0.3 uv run uvicorn api.main:app --port 8000
+```
 
 ### Runnable examples
 

@@ -154,6 +154,11 @@ class Neo4jConfig:
 
     # Routing + vector search.
     law: str = "auto"
+    # When 'auto' routing is uncertain (no keyword match), fall back to this
+    # corpus IF the query is in that corpus's language — so an uncertain
+    # Vietnamese question gets the VN decree instead of unrelated US law.
+    # Set to "" to keep the broad "query everything" fallback.
+    default_corpus: str = "vn"
     candidate_k: int = 20
     min_score: float = 0.0
     neighbors: int = 1

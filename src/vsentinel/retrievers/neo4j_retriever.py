@@ -126,7 +126,15 @@ class Neo4jRetriever:
         driver = self._ensure_driver()
         embedder = self._ensure_embedder()
 
-        selected, _ = select_corpora(query, self.config.law)
+        source_language = detect_query_language(query)
+        # Uncertain auto-routing falls back to the default corpus only when the
+        # query is in that corpus's language (keeps US law out of VN queries).
+        fallback = None
+        dc = self.config.default_corpus
+        if dc and dc in CORPORA and CORPORA[dc]["language"] == source_language:
+            fallback = [dc]
+
+        selected, _ = select_corpora(query, self.config.law, fallback=fallback)
         indexes = driver.online_vector_indexes()
         available = [
             corpus for corpus in selected
@@ -137,7 +145,6 @@ class Neo4jRetriever:
                 "Không có vector index phù hợp ở trạng thái ONLINE trên Neo4j."
             )
 
-        source_language = detect_query_language(query)
         embedding_cache: dict[str, list[float]] = {}
         query_variants: dict[str, list[dict[str, str]]] = {}
         raw_rows: list[dict] = []

@@ -14,9 +14,13 @@ def _build_sentinel() -> Sentinel:
     """Default: offline BM25. Set VSENTINEL_RETRIEVER=neo4j (with NEO4J_* creds)
     to serve real reranked citations over the legal-knowledge graph."""
     if os.environ.get("VSENTINEL_RETRIEVER", "").lower() == "neo4j":
-        from vsentinel import Neo4jRetriever
+        from vsentinel import Neo4jConfig, Neo4jRetriever
 
-        retriever = Neo4jRetriever()
+        # Relevance floor: the cross-encoder scores relevant legal units ~0.7-1.0
+        # and off-topic ones ~0.0, so 0.3 drops irrelevant cross-law citations
+        # (returns no citation rather than a forced wrong one). Env-tunable.
+        floor = float(os.environ.get("VSENTINEL_MIN_RERANK", "0.3"))
+        retriever = Neo4jRetriever(Neo4jConfig.from_env(min_reranker_score=floor))
         # Pre-load embedder/reranker + open the driver so the first real request
         # isn't penalised by a cold model load (~tens of seconds on CPU).
         retriever.search("khởi động hệ thống", k=1)

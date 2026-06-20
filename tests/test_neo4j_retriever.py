@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from vsentinel.retrievers import Neo4jConfig, Neo4jRetriever
-from vsentinel.retrievers.fusion import fuse_hits
+from vsentinel.retrievers.fusion import fuse_hits, rerank_rows, select_corpora
 from vsentinel.schema import Article
 
 
@@ -202,3 +202,44 @@ def test_fuse_hits_accumulates_rrf_contributions():
     assert fused[0]["id"] == "n1"
     # Best raw score is preserved across the merge.
     assert by_id["n1"]["score"] == pytest.approx(0.9)
+
+
+# --- relevance: language-gated routing + reranker floor ----------------------
+
+def test_auto_routing_uses_fallback_when_uncertain():
+    """An uncertain query routes to the fallback corpus, not every corpus."""
+    selected, _ = select_corpora("xin chào buổi sáng", "auto", fallback=["vn"])
+    assert selected == ["vn"]
+
+
+def test_auto_routing_without_fallback_queries_all():
+    """No fallback => uncertain queries still fan out to every corpus."""
+    selected, _ = select_corpora("xin chào buổi sáng", "auto")
+    assert set(selected) == {"vn", "ferpa", "coppa"}
+
+
+def test_explicit_keyword_still_routes_to_its_corpus():
+    """A FERPA cue routes to FERPA even with a VN fallback available."""
+    selected, _ = select_corpora(
+        "When can a school disclose education records?", "auto", fallback=["vn"]
+    )
+    assert "ferpa" in selected
+
+
+def test_rerank_floor_drops_offtopic_candidates():
+    """min_reranker_score drops weak matches so off-topic queries cite nothing."""
+
+    class _FakeReranker:
+        # First candidate clearly relevant, second clearly off-topic.
+        def score_pairs(self, pairs, normalize=True):
+            return [0.95, 0.02]
+
+    rows = [
+        {"id": "a", "corpus": "vn", "citation": "Điều 15", "text": "relevant", "query_text": "q"},
+        {"id": "b", "corpus": "vn", "citation": "Mẫu AI07b", "text": "a form", "query_text": "q"},
+    ]
+    qv = {"vn": [{"variant": "original", "language": "vi", "text": "q"}]}
+
+    kept = rerank_rows(rows, qv, _FakeReranker(), rerank_top_n=2,
+                       query_mode="both", min_reranker_score=0.3)
+    assert [r["id"] for r in kept] == ["a"]

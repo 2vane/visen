@@ -157,7 +157,7 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 - **AuraDB Cypher uses `db.index.vector.queryNodes`**, which AuraDB now flags as deprecated in favor of `SEARCH` — works today, worth migrating.
 - **Single-message scope** — no multi-turn/crescendo attack detection (deliberate YAGNI for the MVP).
 - **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally. (Note: a spurious rule hit shadows `illegal` toward `attack`; keep rule precision high — see the `persona_dan`/"hướng dẫn" fix.)
-- **Cross-law retrieval relevance** — the graph holds AI-decree + FERPA + COPPA law, so a health REFRAME can surface US privacy citations that are correctly *labeled* but topically off. Mitigated by enabling rerank and the keyword router; benign turns no longer retrieve at all. Consider a `min_score` floor and tightening `law` routing for the demo.
+- **Cross-law retrieval relevance** — *addressed*: uncertain Vietnamese queries now route to the VN decree only (`default_corpus="vn"`, language-gated), and a `min_reranker_score` floor (demo default 0.3 via `VSENTINEL_MIN_RERANK`) drops off-topic hits so an irrelevant question returns *no* citation instead of mislabeled US law. Verified live: health/benign → 0 citations, AI-duty query → ND-142, English FERPA query → FERPA. FERPA/COPPA remain reachable via keywords or explicit `law=`.
 - Eval numbers need the real MultiJail-vi / XSTest-vi files to be meaningful.
 
 ## 9. Run

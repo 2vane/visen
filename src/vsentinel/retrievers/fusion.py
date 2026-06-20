@@ -32,8 +32,13 @@ def select_corpora(
     law: str,
     corpora: dict = CORPORA,
     router_terms: dict = ROUTER_TERMS,
+    fallback: list[str] | None = None,
 ) -> tuple[list[str], dict[str, int]]:
-    """Pick which corpora to query: explicit law, all, or router-driven auto."""
+    """Pick which corpora to query: explicit law, all, or router-driven auto.
+
+    ``fallback`` is the corpus list used when 'auto' routing finds no keyword
+    match; defaults to every corpus when not supplied.
+    """
     if law in corpora:
         return [law], router_scores(question, router_terms)
 
@@ -44,8 +49,9 @@ def select_corpora(
     best = max(scores.values(), default=0)
 
     if best == 0:
-        # Uncertain: query everything rather than miss the governing law.
-        return list(corpora), scores
+        # Uncertain: use the caller's fallback (e.g. the governing law for the
+        # query's language) rather than blindly querying every corpus.
+        return (list(fallback) if fallback else list(corpora)), scores
 
     # Keep near-ties so EdTech queries can hit FERPA and COPPA together.
     selected = [
