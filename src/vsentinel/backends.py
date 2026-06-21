@@ -28,9 +28,13 @@ class Chatbot(Protocol):
 
 
 class OllamaClassifier:
-    """Default classifier: Qwen3Guard-Gen via Ollama (safe/controversial/unsafe)."""
+    """Default classifier via Ollama (safe/controversial/unsafe).
 
-    def __init__(self, model: str = "qwen3guard", base_url: str | None = None, timeout: float = 15):
+    Designed for Qwen3Guard-Gen, but it is not on the Ollama registry, so the
+    default model is ``qwen2.5`` (the classifier prompt is model-agnostic).
+    """
+
+    def __init__(self, model: str = "qwen2.5", base_url: str | None = None, timeout: float = 15):
         self.model = model
         self.base_url = base_url
         self.timeout = timeout
