@@ -35,8 +35,12 @@ _DOMAIN_TERMS: dict[str, list[str]] = {
     ],
 }
 
+# Longest term first so multi-word phrases ("benh vien") win over their own
+# prefix ("benh") in the regex alternation instead of being shadowed by it.
 _DOMAIN_RX = {
-    domain: re.compile(r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")\b")
+    domain: re.compile(
+        r"\b(?:" + "|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True)) + r")\b"
+    )
     for domain, terms in _DOMAIN_TERMS.items()
 }
 

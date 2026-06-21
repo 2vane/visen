@@ -58,16 +58,24 @@ _WINDOW = 60.0
 
 
 def _enforce_limits(
-    request: Request, x_api_key: str | None = Header(default=None)
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> None:
     """Optional, env-gated access control (both OFF by default).
 
-    - VSENTINEL_API_KEY set => require a matching X-API-Key header.
+    - VSENTINEL_API_KEY set => require a matching key, supplied either as the
+      ``X-API-Key`` header or as ``Authorization: Bearer <key>`` (the latter so
+      OpenAI/Ollama chat clients pointed at the proxy can authenticate normally).
     - VSENTINEL_RATE_LIMIT=N (per minute, >0) => simple per-client throttle.
     """
     api_key = os.environ.get("VSENTINEL_API_KEY")
-    if api_key and not hmac.compare_digest(x_api_key or "", api_key):
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    if api_key:
+        provided = x_api_key or ""
+        if not provided and authorization and authorization.lower().startswith("bearer "):
+            provided = authorization[7:].strip()
+        if not hmac.compare_digest(provided, api_key):
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     try:
         limit = int(os.environ.get("VSENTINEL_RATE_LIMIT", "0") or "0")
@@ -99,8 +107,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="V-Sentinel", lifespan=lifespan)
 # Guardrail proxy: external chat UIs can route through here (OpenAI- and
 # Ollama-native wire formats), so any client points at this server, not Ollama.
-app.include_router(openai_compat.build_router(sentinel, store.record))
-app.include_router(ollama_compat.build_router(sentinel, store.record))
+# Same env-gated auth/rate-limit as /chat — otherwise a key/limit set by the
+# operator would be trivially bypassed by hitting the proxy routes instead.
+app.include_router(
+    openai_compat.build_router(sentinel, store.record),
+    dependencies=[Depends(_enforce_limits)],
+)
+app.include_router(
+    ollama_compat.build_router(sentinel, store.record),
+    dependencies=[Depends(_enforce_limits)],
+)
 
 
 @app.exception_handler(Exception)

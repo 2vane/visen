@@ -74,9 +74,15 @@ def score_rules(text: str, flags: list[str], raw: str | None = None) -> tuple[fl
     # text upstream, which would corrupt case-sensitive base64 before we see it.
     source = raw if raw is not None else text
     targets = [fold_diacritics(text)]
+    # Per-token de-leet (h4ck -> hack) and a whole-string pass (catches payloads
+    # split across token boundaries, e.g. "1gn 0re"). Scan-only: a spurious
+    # decode (70kg -> tokg) just fails to match — it never touches the real text.
     leet = _decode_leet(text)
     if leet != text:
         targets.append(fold_diacritics(leet))
+    full_leet = "".join(LEET.get(c, c) for c in text)
+    if full_leet != text:
+        targets.append(fold_diacritics(full_leet))
     targets.extend(fold_diacritics(p) for p in _decode_b64_payloads(source))
 
     hits: list[RuleHit] = []

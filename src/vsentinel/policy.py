@@ -14,14 +14,29 @@ _ALLOWED_SOURCES = {"ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA"}
 # Categories that get domain-specific legal framing (attacks keep OWASP only).
 _DOMAIN_AWARE = {"sensitive_legal", "illegal"}
 
+# Parse each policy file once and cache — decide() runs on every request, so
+# re-reading from disk per call would be wasteful under proxy load (cf. detect._rules).
+_POLICY_CACHE: list[dict] | None = None
+_TEMPLATES_CACHE: dict | None = None
+_DOMAIN_POLICY_CACHE: dict | None = None
+
 def _load_policy() -> list[dict]:
-    return yaml.safe_load(_POLICY.read_text(encoding="utf-8"))
+    global _POLICY_CACHE
+    if _POLICY_CACHE is None:
+        _POLICY_CACHE = yaml.safe_load(_POLICY.read_text(encoding="utf-8"))
+    return _POLICY_CACHE
 
 def _load_templates() -> dict:
-    return yaml.safe_load(_TEMPLATES.read_text(encoding="utf-8"))
+    global _TEMPLATES_CACHE
+    if _TEMPLATES_CACHE is None:
+        _TEMPLATES_CACHE = yaml.safe_load(_TEMPLATES.read_text(encoding="utf-8"))
+    return _TEMPLATES_CACHE
 
 def _load_domain_policy() -> dict:
-    return yaml.safe_load(_DOMAIN_POLICY.read_text(encoding="utf-8"))
+    global _DOMAIN_POLICY_CACHE
+    if _DOMAIN_POLICY_CACHE is None:
+        _DOMAIN_POLICY_CACHE = yaml.safe_load(_DOMAIN_POLICY.read_text(encoding="utf-8"))
+    return _DOMAIN_POLICY_CACHE
 
 def _dedupe(citations: list[Citation]) -> list[Citation]:
     """Drop duplicate (source, ref) pairs, preserving first-seen order."""

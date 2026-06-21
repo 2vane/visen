@@ -182,3 +182,23 @@ def test_ollama_chat_records_to_recent():
                                        "messages": [{"role": "user", "content": "ola watch"}]})
     new = client.get("/recent", params={"after": after_seq}).json()
     assert any(ev["source"] == "ollama" and ev["trace"]["input_raw"] == "ola watch" for ev in new)
+
+
+def test_proxy_routes_respect_api_key(monkeypatch):
+    """Critical: proxy routes must honor the same key gate as /chat (both header styles)."""
+    monkeypatch.setenv("VSENTINEL_API_KEY", "s3cret")
+    fake = DecisionTrace(input_raw="hi", final_message="ok", decision="ALLOW")
+    with patch.object(sentinel, "run", return_value=fake):
+        # No credentials -> 401 on both proxy formats.
+        assert client.post("/v1/chat/completions",
+                           json={"messages": [{"role": "user", "content": "hi"}]}).status_code == 401
+        assert client.post("/api/chat",
+                           json={"stream": False, "messages": [{"role": "user", "content": "hi"}]}).status_code == 401
+        # Authorization: Bearer accepted (how OpenAI/Ollama clients send it).
+        assert client.post("/v1/chat/completions",
+                           json={"messages": [{"role": "user", "content": "hi"}]},
+                           headers={"Authorization": "Bearer s3cret"}).status_code == 200
+        # X-API-Key also accepted.
+        assert client.post("/api/chat",
+                           json={"stream": False, "messages": [{"role": "user", "content": "hi"}]},
+                           headers={"X-API-Key": "s3cret"}).status_code == 200
