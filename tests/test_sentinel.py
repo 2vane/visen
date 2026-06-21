@@ -117,9 +117,10 @@ def test_attack_threshold_honored():
     assert blocked.decision == "BLOCK"
     assert blocked.risk.category == "attack"
 
-    # Raised threshold (1.01): same score is now below threshold; safe classifier -> not BLOCK.
+    # Raised threshold (1.0): the 0.9 score is now below threshold; safe classifier -> not BLOCK.
+    # (1.0 is the max valid threshold; this input scores 0.9, so it stays below.)
     raised = Sentinel(
-        config=SentinelConfig(attack_threshold=1.01),
+        config=SentinelConfig(attack_threshold=1.0),
         classifier=_safe_classifier,
         chatbot=_fake_chatbot,
     )
@@ -152,3 +153,33 @@ def test_check_output_redacts_phone_number():
 
     assert check.verdict == "REDACT"
     assert "[PHONE]" in text
+
+
+# Test 7 ─ fail-safe: backend exceptions must not crash run() ─────────────────
+
+def test_chatbot_exception_returns_safe_fallback():
+    """A chatbot that raises must not propagate; run() returns a safe message."""
+    from vsentinel.sentinel import _SAFE_FALLBACK
+
+    def _boom(user_text, safety_directive, articles):
+        raise RuntimeError("ollama exploded")
+
+    s = Sentinel(classifier=_safe_classifier, chatbot=_boom)
+    trace = s.run("Giờ làm việc của bệnh viện?")
+
+    assert trace.final_message == _SAFE_FALLBACK
+
+
+def test_output_check_exception_fails_closed_to_block():
+    """If output screening raises, run() fails closed (BLOCK), not open."""
+    def _classifier(text, role="user"):
+        if role == "assistant":
+            raise RuntimeError("guard exploded")
+        return "safe"
+
+    s = Sentinel(classifier=_classifier, chatbot=_fake_chatbot)
+    trace = s.run("Câu hỏi bình thường")
+
+    assert trace.decision == "BLOCK"
+    assert trace.output_check is not None
+    assert trace.output_check.verdict == "BLOCK"

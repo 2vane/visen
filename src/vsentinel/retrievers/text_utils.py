@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from vsentinel.normalize import fold_diacritics
+
 # Vietnamese-specific letters; their presence is a strong signal of Vietnamese.
 VIETNAMESE_DIACRITICS = set(
     "ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệ"
@@ -29,11 +31,17 @@ def clean_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").replace("\xa0", " ")).strip()
 
 
+# Hints folded once so diacritic-less Vietnamese ("tai lieu") still matches the
+# accented vocabulary above.
+_FOLDED_HINTS = {fold_diacritics(h) for h in VIETNAMESE_HINTS}
+
+
 def detect_query_language(text: str) -> str:
     """Distinguish Vietnamese from English well enough to drive dual-query."""
     if any(character in VIETNAMESE_DIACRITICS for character in text):
         return "vi"
 
-    words = set(re.findall(r"[A-Za-zÀ-ỹ]+", text.casefold()))
-    vietnamese_hits = len(words & VIETNAMESE_HINTS)
+    # Fold input words too, so unaccented Vietnamese is matched against hints.
+    words = {fold_diacritics(w) for w in re.findall(r"[A-Za-zÀ-ỹ]+", text)}
+    vietnamese_hits = len(words & _FOLDED_HINTS)
     return "vi" if vietnamese_hits >= 2 else "en"

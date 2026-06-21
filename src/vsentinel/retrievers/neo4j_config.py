@@ -164,6 +164,18 @@ class Neo4jConfig:
     neighbors: int = 1
     rrf_k: int = 60
 
+    def __post_init__(self) -> None:
+        if self.candidate_k < 1:
+            raise ValueError(f"candidate_k phải >= 1, nhận {self.candidate_k!r}")
+        if self.min_score < 0.0:
+            raise ValueError(f"min_score phải >= 0.0, nhận {self.min_score!r}")
+        if self.rrf_k < 1:
+            raise ValueError(f"rrf_k phải >= 1, nhận {self.rrf_k!r}")
+        if self.expected_dimension < 1:
+            raise ValueError(
+                f"expected_dimension phải >= 1, nhận {self.expected_dimension!r}"
+            )
+
     @classmethod
     def from_env(cls, **overrides) -> "Neo4jConfig":
         """Build a config from ``NEO4J_*`` env vars; ``overrides`` win over them.

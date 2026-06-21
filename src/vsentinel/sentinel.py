@@ -19,6 +19,7 @@ vsentinel.backends.Classifier / Chatbot). Defaults target local Ollama.
 """
 from __future__ import annotations
 
+import logging
 import time
 
 from vsentinel.backends import Chatbot, Classifier, OllamaChatbot, OllamaClassifier
@@ -29,6 +30,12 @@ from vsentinel.policy import categorize, decide
 from vsentinel.retrieve import Retriever
 from vsentinel.schema import DecisionTrace, OutputCheck, RiskInfo
 from vsentinel.verify import check_output as _check_output
+
+LOGGER = logging.getLogger("vsentinel.sentinel")
+
+# Fail-safe text when generation or output screening crashes unexpectedly.
+_SAFE_FALLBACK = "Xin lỗi, hệ thống tạm thời không thể trả lời. Vui lòng thử lại sau."
+_BLOCKED_FALLBACK = "Phản hồi đã bị chặn do vi phạm chính sách an toàn."
 
 
 class Sentinel:
@@ -53,7 +60,7 @@ class Sentinel:
     def check_input(self, message: str) -> DecisionTrace:
         """Stages 0-2: normalize, score, classify, decide. No generation."""
         norm, flags = normalize(message)
-        rule_score, hits = score_rules(norm, flags)
+        rule_score, hits = score_rules(norm, flags, raw=message)
         severity = self.classifier(message, "user")
         category = categorize(rule_score, hits, severity, self.config.attack_threshold)
         decision, policy, directive = decide(category, severity, self._retriever)
@@ -87,12 +94,29 @@ class Sentinel:
         trace = self.check_input(message)
         if trace.decision == "BLOCK":
             trace.latency_ms = int((time.perf_counter() - t0) * 1000)
+            LOGGER.info("decision=BLOCK category=%s latency_ms=%s",
+                        trace.risk.category, trace.latency_ms)
             return trace
-        reply = self.chatbot(message, trace.safety_directive, trace.retrieved_articles)
-        check, final_text = self.check_output(reply)
+
+        # Generation and output screening are defended: a backend that throws
+        # must not crash the request — fail closed (safe message / BLOCK).
+        try:
+            reply = self.chatbot(message, trace.safety_directive, trace.retrieved_articles)
+        except Exception:
+            LOGGER.exception("Chatbot backend raised; returning safe fallback.")
+            reply = _SAFE_FALLBACK
+
+        try:
+            check, final_text = self.check_output(reply)
+        except Exception:
+            LOGGER.exception("Output check raised; failing closed (BLOCK).")
+            check, final_text = OutputCheck(verdict="BLOCK"), _BLOCKED_FALLBACK
+
         trace.output_check = check
         if check.verdict == "BLOCK":
             trace.decision = "BLOCK"
         trace.final_message = final_text
         trace.latency_ms = int((time.perf_counter() - t0) * 1000)
+        LOGGER.info("decision=%s output_verdict=%s latency_ms=%s",
+                    trace.decision, check.verdict, trace.latency_ms)
         return trace

@@ -119,20 +119,22 @@ class Neo4jRetriever:
 
         return variants
 
-    # -- public API ---------------------------------------------------------
+    def _reconnect(self) -> None:
+        """Drop a stale connection so the next ``_ensure_driver`` reconnects."""
+        self._connected = False
+        if self._driver is not None:
+            try:
+                self._driver.close()
+            except Exception as exc:  # closing a dead driver is best-effort
+                LOGGER.warning("Lỗi khi đóng driver cũ: %s", exc)
+        self._ensure_driver()
 
-    def search(self, query: str, k: int = 2) -> list[Article]:
-        """Retrieve the top-``k`` legal units as :class:`Article` citations."""
+    def _collect_rows(
+        self, query: str, source_language: str, fallback: Optional[list[str]]
+    ) -> tuple[list[dict], dict[str, list[dict[str, str]]]]:
+        """Run routing + per-corpus vector search; touches the live driver."""
         driver = self._ensure_driver()
         embedder = self._ensure_embedder()
-
-        source_language = detect_query_language(query)
-        # Uncertain auto-routing falls back to the default corpus only when the
-        # query is in that corpus's language (keeps US law out of VN queries).
-        fallback = None
-        dc = self.config.default_corpus
-        if dc and dc in CORPORA and CORPORA[dc]["language"] == source_language:
-            fallback = [dc]
 
         selected, _ = select_corpora(query, self.config.law, fallback=fallback)
         indexes = driver.online_vector_indexes()
@@ -169,6 +171,31 @@ class Neo4jRetriever:
                         query_language=variant["language"],
                     )
                 )
+
+        return raw_rows, query_variants
+
+    # -- public API ---------------------------------------------------------
+
+    def search(self, query: str, k: int = 2) -> list[Article]:
+        """Retrieve the top-``k`` legal units as :class:`Article` citations."""
+        source_language = detect_query_language(query)
+        # Uncertain auto-routing falls back to the default corpus only when the
+        # query is in that corpus's language (keeps US law out of VN queries).
+        fallback = None
+        dc = self.config.default_corpus
+        if dc and dc in CORPORA and CORPORA[dc]["language"] == source_language:
+            fallback = [dc]
+
+        try:
+            raw_rows, query_variants = self._collect_rows(query, source_language, fallback)
+        except Exception as exc:
+            # A dropped/stale Neo4j connection recovers with one reconnect+retry;
+            # a persistent failure re-raises (a FallbackRetriever can catch it).
+            if self._driver is None or not self._connected:
+                raise
+            LOGGER.warning("Neo4j query lỗi (%s); kết nối lại và thử lại một lần.", exc)
+            self._reconnect()
+            raw_rows, query_variants = self._collect_rows(query, source_language, fallback)
 
         ranked = fuse_hits(raw_rows, rrf_k=self.config.rrf_k)
 

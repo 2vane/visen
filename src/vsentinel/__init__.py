@@ -26,6 +26,7 @@ __all__ = [
     "wrap",
     "Neo4jRetriever",
     "Neo4jConfig",
+    "FallbackRetriever",
 ]
 
 
@@ -35,7 +36,7 @@ def __getattr__(name: str):
     Kept out of the eager imports so ``import vsentinel`` never requires the
     heavy ``[neo4j]`` extra (torch / sentence-transformers / neo4j driver).
     """
-    if name in ("Neo4jRetriever", "Neo4jConfig"):
+    if name in ("Neo4jRetriever", "Neo4jConfig", "FallbackRetriever"):
         from vsentinel import retrievers
 
         return getattr(retrievers, name)

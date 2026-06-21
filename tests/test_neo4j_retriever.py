@@ -168,6 +168,36 @@ def test_search_tags_coppa_source():
     assert articles[0].source == "COPPA"
 
 
+def test_search_recovers_after_reconnect():
+    """A transient driver failure triggers one reconnect + retry, then succeeds."""
+
+    class _FlakyDriver(_FakeDriver):
+        def __init__(self):
+            self.connect_calls = 0
+            self.search_calls = 0
+
+        def connect(self):
+            self.connect_calls += 1
+
+        def vector_search(self, **kwargs):
+            self.search_calls += 1
+            if self.search_calls == 1:
+                raise RuntimeError("connection reset by peer")
+            return super().vector_search(**kwargs)
+
+    config = Neo4jConfig(uri="x", username="u", password="p",
+                         dual_query=False, rerank=False, law="vn")
+    driver = _FlakyDriver()
+    retriever = Neo4jRetriever(config=config, embedder=_FakeEmbedder(), driver=driver)
+    retriever._connected = True  # already connected, so a failure reconnects
+
+    articles = retriever.search("Trách nhiệm của nhà cung cấp?", k=1)
+
+    assert articles  # recovered with real results
+    assert driver.connect_calls == 1  # reconnected exactly once
+    assert driver.search_calls == 2   # failed once, retried once
+
+
 def test_search_raises_when_no_index_online():
     class _OfflineDriver(_FakeDriver):
         def online_vector_indexes(self) -> dict[str, str]:
