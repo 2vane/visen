@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from vsentinel.server import create_app
 
@@ -21,14 +22,16 @@ try:
 except ModuleNotFoundError:
     pass
 
-_WEB = Path(__file__).resolve().parents[1] / "web" / "index.html"
+_WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+_INDEX = _WEB_DIR / "index.html"
 
 # create_app builds + owns the sentinel (and closes its retriever on shutdown).
 # We re-export the instance so tests can patch `sentinel.run`.
 app = create_app()
+app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 sentinel = app.state.sentinel
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return _WEB.read_text(encoding="utf-8")
+    return _INDEX.read_text(encoding="utf-8")
