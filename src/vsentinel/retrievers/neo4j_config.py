@@ -197,5 +197,15 @@ class Neo4jConfig:
             "password": os.environ["NEO4J_PASSWORD"],
             "database": os.environ.get("NEO4J_DATABASE", "neo4j") or "neo4j",
         }
+        # Device overrides — set these to "cpu" on a small GPU so bge-m3 / the
+        # reranker don't fight the chat model for VRAM (e.g. 6 GB next to qwen2.5).
+        for env_key, field in (
+            ("VSENTINEL_EMBED_DEVICE", "device"),
+            ("VSENTINEL_RERANK_DEVICE", "reranker_device"),
+            ("VSENTINEL_TRANSLATE_DEVICE", "translation_device"),
+        ):
+            value = os.environ.get(env_key)
+            if value:
+                env_values[field] = value
         env_values.update(overrides)
         return cls(**env_values)

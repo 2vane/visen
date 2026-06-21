@@ -313,3 +313,24 @@ def test_rerank_floor_drops_offtopic_candidates():
     kept = rerank_rows(rows, qv, _FakeReranker(), rerank_top_n=2,
                        query_mode="both", min_reranker_score=0.3)
     assert [r["id"] for r in kept] == ["a"]
+
+
+def test_from_env_device_overrides(monkeypatch):
+    """Embedder/reranker device is env-tunable (CPU pin for small GPUs)."""
+    monkeypatch.setenv("NEO4J_URI", "neo4j+s://x.databases.neo4j.io")
+    monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+    monkeypatch.setenv("NEO4J_PASSWORD", "pw")
+    monkeypatch.setenv("VSENTINEL_EMBED_DEVICE", "cpu")
+    monkeypatch.setenv("VSENTINEL_RERANK_DEVICE", "cpu")
+    cfg = Neo4jConfig.from_env()
+    assert cfg.device == "cpu"
+    assert cfg.reranker_device == "cpu"
+
+
+def test_from_env_device_defaults_auto(monkeypatch):
+    monkeypatch.setenv("NEO4J_URI", "neo4j+s://x.databases.neo4j.io")
+    monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+    monkeypatch.setenv("NEO4J_PASSWORD", "pw")
+    monkeypatch.delenv("VSENTINEL_EMBED_DEVICE", raising=False)
+    cfg = Neo4jConfig.from_env()
+    assert cfg.device == "auto"
