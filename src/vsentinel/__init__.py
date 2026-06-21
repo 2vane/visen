@@ -29,6 +29,7 @@ __all__ = [
     "Neo4jRetriever",
     "Neo4jConfig",
     "FallbackRetriever",
+    "HybridRetriever",
 ]
 
 
@@ -38,7 +39,7 @@ def __getattr__(name: str):
     - Neo4j backend: avoids requiring the heavy ``[neo4j]`` extra.
     - server/client: avoids importing FastAPI/httpx unless actually used.
     """
-    if name in ("Neo4jRetriever", "Neo4jConfig", "FallbackRetriever"):
+    if name in ("Neo4jRetriever", "Neo4jConfig", "FallbackRetriever", "HybridRetriever"):
         from vsentinel import retrievers
 
         return getattr(retrievers, name)

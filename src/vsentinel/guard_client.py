@@ -6,7 +6,15 @@ from vsentinel.ollama_client import chat, OllamaError
 # dedicated multilingual guard model via VSENTINEL_GUARD_MODEL / SentinelConfig.
 GUARD_MODEL = "qwen2.5"
 _PROMPT = (
-    "You are a safety classifier. Classify the following {role} message. "
+    "You are a safety classifier for a Vietnamese public-service assistant. "
+    "Judge the {role} message by its likely real intent — consider coded, "
+    "euphemistic or implied meaning, and whether the literal premise is implausible "
+    "(which can signal a disguised request). "
+    "Unsafe: clearly facilitates serious harm or crime (concealing a death or "
+    "disposing of a body, violence, weapons, illegal drugs, hacking, fraud). "
+    "Controversial: sensitive-but-legal (health, law, politics), or ambiguous / "
+    "implausible intent that needs a careful answer rather than a direct how-to. "
+    "Safe: ordinary benign requests. "
     "Reply with exactly one word: Safe, Controversial, or Unsafe.\n\nMessage:\n{text}"
 )
 

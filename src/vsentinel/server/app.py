@@ -34,25 +34,26 @@ _WINDOW = 60.0
 
 def build_default_sentinel() -> Sentinel:
     """Default: offline BM25. Set ``VSENTINEL_RETRIEVER=neo4j`` (with ``NEO4J_*``
-    creds) to serve reranked citations over the legal-knowledge graph.
+    creds and the ``[neo4j]`` extra) to use Neo4j's vector search **beside** BM25:
+    a HybridRetriever interleaves semantic (Neo4j) and lexical (BM25) hits.
 
-    The Neo4j path is wrapped so a missing config or a cold-start failure never
-    crashes boot — it logs and degrades to BM25.
+    The Neo4j path is guarded so a missing extra/config or a cold-start failure
+    never crashes boot — it logs and degrades to BM25-only.
     """
-    if os.environ.get("VSENTINEL_RETRIEVER", "").lower() == "neo4j":
+    if os.environ.get("VSENTINEL_RETRIEVER", "").lower() in ("neo4j", "hybrid"):
         try:
-            from vsentinel import FallbackRetriever, Neo4jConfig, Neo4jRetriever
+            from vsentinel import HybridRetriever, Neo4jConfig, Neo4jRetriever
             from vsentinel.retrieve import Retriever
 
             floor = float(os.environ.get("VSENTINEL_MIN_RERANK", "0.3"))
             neo = Neo4jRetriever(Neo4jConfig.from_env(min_reranker_score=floor))
-            retriever = FallbackRetriever(neo, Retriever())
+            retriever = HybridRetriever(neo, Retriever())
             # Warm the embedder/reranker + driver so the first request isn't
-            # penalised by a cold load; FallbackRetriever swallows a failure.
+            # penalised by a cold load; HybridRetriever swallows a failure.
             retriever.search("khởi động hệ thống", k=1)
             return Sentinel(retriever=retriever)
         except Exception:
-            LOGGER.exception("Neo4j retriever unavailable; falling back to BM25.")
+            LOGGER.exception("Neo4j retriever unavailable; using BM25 only.")
             return Sentinel()
     return Sentinel()
 
