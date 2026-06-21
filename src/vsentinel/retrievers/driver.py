@@ -35,6 +35,10 @@ class Neo4jDriver:
         self.driver = GraphDatabase.driver(
             config.uri,
             auth=(config.username, config.password),
+            # `db.index.vector.queryNodes` is the supported vector call on Neo4j
+            # 5.x; the server emits a forward-looking DEPRECATION notice (SEARCH
+            # in Cypher 25). Silence that class so it doesn't spam logs.
+            notifications_disabled_classifications=["DEPRECATION"],
         )
         self.database = config.database or "neo4j"
 
