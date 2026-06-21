@@ -202,3 +202,20 @@ def test_proxy_routes_respect_api_key(monkeypatch):
         assert client.post("/api/chat",
                            json={"stream": False, "messages": [{"role": "user", "content": "hi"}]},
                            headers={"X-API-Key": "s3cret"}).status_code == 200
+
+
+def test_create_app_instances_have_isolated_state():
+    """Each create_app() gets its own monitor store (no cross-app leakage)."""
+    from vsentinel.server import create_app as _create_app
+
+    fake = DecisionTrace(input_raw="iso", final_message="ok", decision="ALLOW")
+
+    class _Stub:
+        def run(self, message):
+            return fake
+
+    c1 = TestClient(_create_app(_Stub()))
+    c2 = TestClient(_create_app(_Stub()))
+    c1.post("/chat", json={"message": "iso"})
+    assert len(c1.get("/recent").json()) == 1
+    assert c2.get("/recent").json() == []  # second app's feed is independent

@@ -6,7 +6,9 @@ Ollama-native (``/api/...``) proxy endpoints, plus ``/health`` and the
 ``/recent`` monitor feed. It is part of the SDK, so ``vsentinel serve`` and a
 ``pip``-installed package both work without the demo app.
 
-The demo (``api/main.py``) wraps this and adds the browser UI.
+All mutable state (rate-limit buckets, the monitor store) is per-app, so calling
+``create_app()`` more than once in a process yields fully isolated apps. The demo
+(``api/main.py``) wraps this and adds the browser UI.
 """
 from __future__ import annotations
 
@@ -22,13 +24,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from vsentinel.sentinel import Sentinel
-from vsentinel.server import ollama_compat, openai_compat, store
+from vsentinel.server import ollama_compat, openai_compat
+from vsentinel.server.store import Store
 
 LOGGER = logging.getLogger("vsentinel.server")
 
-# Per-client fixed-window rate-limit state: client -> (window_start, count).
-_RATE_BUCKETS: dict[str, tuple[float, int]] = {}
-_RATE_LOCK = threading.Lock()
 _WINDOW = 60.0
 
 
@@ -57,59 +57,70 @@ def build_default_sentinel() -> Sentinel:
     return Sentinel()
 
 
-def _enforce_limits(
-    request: Request,
-    x_api_key: str | None = Header(default=None),
-    authorization: str | None = Header(default=None),
-) -> None:
-    """Optional, env-gated access control (both OFF by default).
-
-    - ``VSENTINEL_API_KEY`` set => require a matching key, supplied either as the
-      ``X-API-Key`` header or as ``Authorization: Bearer <key>`` (so OpenAI/Ollama
-      chat clients pointed at the proxy can authenticate normally).
-    - ``VSENTINEL_RATE_LIMIT=N`` (per minute, >0) => simple per-client throttle.
-    """
-    api_key = os.environ.get("VSENTINEL_API_KEY")
-    if api_key:
-        provided = x_api_key or ""
-        if not provided and authorization and authorization.lower().startswith("bearer "):
-            provided = authorization[7:].strip()
-        if not hmac.compare_digest(provided, api_key):
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
-
-    try:
-        limit = int(os.environ.get("VSENTINEL_RATE_LIMIT", "0") or "0")
-    except ValueError:
-        limit = 0
-    if limit > 0:
-        client = request.client.host if request.client else "unknown"
-        now = time.monotonic()
-        with _RATE_LOCK:
-            for ip in [ip for ip, (ws, _) in _RATE_BUCKETS.items() if now - ws >= _WINDOW]:
-                del _RATE_BUCKETS[ip]
-            window_start, count = _RATE_BUCKETS.get(client, (now, 0))
-            count += 1
-            _RATE_BUCKETS[client] = (window_start, count)
-            exceeded = count > limit
-        if exceeded:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
-
-
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
 
 
 def create_app(sentinel: Sentinel | None = None) -> FastAPI:
-    """Build the guardrail service. Pass a ``Sentinel`` to inject backends/config;
-    otherwise a default (env-driven) one is built."""
+    """Build the guardrail service.
+
+    Pass a ``Sentinel`` to inject backends/config; otherwise a default
+    (env-driven) one is built. The app only closes the retriever on shutdown if
+    it built the sentinel itself (so an injected, possibly shared, one is left
+    alone). The built instance is available at ``app.state.sentinel``.
+    """
+    owns_sentinel = sentinel is None
     sentinel = sentinel or build_default_sentinel()
+    store = Store()
+
+    # Per-app rate-limit state: client -> (window_start, count).
+    rate_buckets: dict[str, tuple[float, int]] = {}
+    rate_lock = threading.Lock()
+
+    def enforce_limits(
+        request: Request,
+        x_api_key: str | None = Header(default=None),
+        authorization: str | None = Header(default=None),
+    ) -> None:
+        """Optional, env-gated access control (both OFF by default).
+
+        - ``VSENTINEL_API_KEY`` set => require a matching key via the ``X-API-Key``
+          header or ``Authorization: Bearer <key>`` (so OpenAI/Ollama clients
+          pointed at the proxy can authenticate normally).
+        - ``VSENTINEL_RATE_LIMIT=N`` (per minute, >0) => simple per-client throttle.
+        """
+        api_key = os.environ.get("VSENTINEL_API_KEY")
+        if api_key:
+            provided = x_api_key or ""
+            if not provided and authorization and authorization.lower().startswith("bearer "):
+                provided = authorization[7:].strip()
+            if not hmac.compare_digest(provided, api_key):
+                raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+        try:
+            limit = int(os.environ.get("VSENTINEL_RATE_LIMIT", "0") or "0")
+        except ValueError:
+            limit = 0
+        if limit > 0:
+            client = request.client.host if request.client else "unknown"
+            now = time.monotonic()
+            with rate_lock:
+                for ip in [ip for ip, (ws, _) in rate_buckets.items() if now - ws >= _WINDOW]:
+                    del rate_buckets[ip]
+                window_start, count = rate_buckets.get(client, (now, 0))
+                count += 1
+                rate_buckets[client] = (window_start, count)
+                exceeded = count > limit
+            if exceeded:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
-        close = getattr(sentinel._retriever, "close", None)
-        if callable(close):
-            close()
+        if owns_sentinel:
+            close = getattr(sentinel._retriever, "close", None)
+            if callable(close):
+                close()
 
     app = FastAPI(title="V-Sentinel", lifespan=lifespan)
     app.state.sentinel = sentinel
@@ -119,7 +130,7 @@ def create_app(sentinel: Sentinel | None = None) -> FastAPI:
         LOGGER.exception("Unhandled error on %s", request.url.path)
         return JSONResponse(status_code=500, content={"detail": "Internal error"})
 
-    @app.post("/chat", dependencies=[Depends(_enforce_limits)])
+    @app.post("/chat", dependencies=[Depends(enforce_limits)])
     def chat(body: ChatIn):
         trace = sentinel.run(body.message)
         store.record("web", trace)
@@ -143,10 +154,10 @@ def create_app(sentinel: Sentinel | None = None) -> FastAPI:
     # Same env-gated auth/rate-limit as /chat (else the controls are bypassable).
     app.include_router(
         openai_compat.build_router(sentinel, store.record),
-        dependencies=[Depends(_enforce_limits)],
+        dependencies=[Depends(enforce_limits)],
     )
     app.include_router(
         ollama_compat.build_router(sentinel, store.record),
-        dependencies=[Depends(_enforce_limits)],
+        dependencies=[Depends(enforce_limits)],
     )
     return app

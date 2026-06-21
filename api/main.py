@@ -10,14 +10,14 @@ from pathlib import Path
 
 from fastapi.responses import HTMLResponse
 
-from vsentinel.server import build_default_sentinel, create_app
+from vsentinel.server import create_app
 
 _WEB = Path(__file__).resolve().parents[1] / "web" / "index.html"
 
-# Exposed module-level so tests can patch `sentinel.run` and reach the instance
-# the routes use.
-sentinel = build_default_sentinel()
-app = create_app(sentinel)
+# create_app builds + owns the sentinel (and closes its retriever on shutdown).
+# We re-export the instance so tests can patch `sentinel.run`.
+app = create_app()
+sentinel = app.state.sentinel
 
 
 @app.get("/", response_class=HTMLResponse)

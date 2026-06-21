@@ -38,3 +38,10 @@ def test_client_health():
     respx.get("http://vs/health").mock(return_value=httpx.Response(200, json={"status": "ok"}))
     with VSentinelClient("http://vs") as vs:
         assert vs.health()["status"] == "ok"
+
+
+def test_client_rejects_api_key_with_injected_client():
+    import pytest
+
+    with pytest.raises(ValueError):
+        VSentinelClient("http://vs", api_key="x", client=httpx.Client())

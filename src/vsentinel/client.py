@@ -28,6 +28,13 @@ class VSentinelClient:
         timeout: float = 60.0,
         client: httpx.Client | None = None,
     ) -> None:
+        # An injected client carries its own base_url/headers/timeout. Refuse to
+        # silently drop credentials — the caller must set them on their client.
+        if client is not None and api_key is not None:
+            raise ValueError(
+                "api_key is ignored when a client is injected; set the "
+                "X-API-Key header on your httpx.Client instead"
+            )
         headers = {"X-API-Key": api_key} if api_key else {}
         self._client = client or httpx.Client(
             base_url=base_url.rstrip("/"), headers=headers, timeout=timeout
