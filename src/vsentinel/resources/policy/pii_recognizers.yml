@@ -1,3 +1,6 @@
+# Order matters: more specific / shorter patterns come first. detect_pii skips
+# spans that overlap an already-matched hit, so the broad bank-account rule must
+# sit after CCCD/CMND/phone/MST/BHXH/passport, and email stays last.
 - name: vn_cccd
   entity: CCCD
   pattern: "\\b\\d{12}\\b"
@@ -14,6 +17,18 @@
   entity: MST
   pattern: "\\b\\d{10}(?:-\\d{3})?\\b"
   context: ["mst", "ma so thue", "mã số thuế"]
+- name: vn_bhxh
+  entity: BHXH
+  pattern: "\\b\\d{10}\\b"
+  context: ["bhxh", "bao hiem xa hoi", "bảo hiểm xã hội", "so so bhxh", "sổ bhxh"]
+- name: vn_passport
+  entity: PASSPORT
+  pattern: "\\b[A-Z]{1,2}\\d{7}\\b"
+  context: ["passport", "ho chieu", "hộ chiếu"]
+- name: vn_bank_account
+  entity: BANK_ACCOUNT
+  pattern: "\\b\\d{8,20}\\b"
+  context: ["so tai khoan", "tai khoan", "tài khoản", "stk", "ngan hang", "ngân hàng"]
 - name: email
   entity: EMAIL
   pattern: "[\\w.+-]+@[\\w-]+\\.[\\w.-]+"

@@ -5,6 +5,9 @@
     - "ignore (all )?(previous|prior|above) (instruction|prompt|rule)"
     - "disregard (your |the )?(guideline|rule|instruction)"
     - "(bo qua|quen|khong tuan theo).{0,20}(huong dan|chi dan|quy tac|lenh)"
+    # High-precision non-English variants (common in SEA deployments).
+    - "(忽略|无视|無視)(之前|上述|所有|先前)?.{0,4}(指示|指令|规则|規則|提示)"
+    - "abaikan.{0,15}(instruksi|aturan|petunjuk|perintah)"
 - id: persona_dan
   owasp_tag: LLM01
   weight: 0.85
@@ -28,3 +31,6 @@
   patterns:
     - "^(sure|absolutely|of course)[,!]? here('?s| is)"
     - "^(chac chan( roi)?|duong nhien)[,!]? day la"
+    # Tolerate a leading directive ("Answer this: Sure, here's ...").
+    - "[:\\-]\\s*(sure|absolutely|of course)[,!]? here('?s| is)"
+    - "[:\\-]\\s*(chac chan( roi)?|duong nhien)[,!]? day la"
