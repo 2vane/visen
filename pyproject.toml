@@ -1,10 +1,20 @@
 [project]
 name = "vsentinel"
-version = "0.1.0"
+version = "0.2.0"
 description = "V-Sentinel: dual-control guardrail (jailbreak + ND-142/2026 compliance) for Vietnamese chatbots"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "TyrusRC", email = "63230297+TyrusRC@users.noreply.github.com" }
+]
+keywords = ["guardrail", "llm-security", "jailbreak", "prompt-injection", "vietnamese", "ai-compliance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Natural Language :: Vietnamese",
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -25,6 +35,13 @@ neo4j = [
     "sentencepiece>=0.2",
     "torch>=2.0",
 ]
+
+[project.scripts]
+vsentinel = "vsentinel.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/2vane/visen"
+Repository = "https://github.com/2vane/visen"
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]

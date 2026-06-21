@@ -20,7 +20,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from api.proxy_common import ChatMessage, last_user_message
+from vsentinel.server.proxy_common import ChatMessage, last_user_message
 
 _CHUNK = 24  # chars per streamed delta
 

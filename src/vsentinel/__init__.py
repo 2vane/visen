@@ -24,6 +24,8 @@ __all__ = [
     "OutputCheck",
     "guard",
     "wrap",
+    "create_app",
+    "VSentinelClient",
     "Neo4jRetriever",
     "Neo4jConfig",
     "FallbackRetriever",
@@ -31,13 +33,21 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazily expose the optional Neo4j backend.
+    """Lazily expose optional surfaces so plain ``import vsentinel`` stays light.
 
-    Kept out of the eager imports so ``import vsentinel`` never requires the
-    heavy ``[neo4j]`` extra (torch / sentence-transformers / neo4j driver).
+    - Neo4j backend: avoids requiring the heavy ``[neo4j]`` extra.
+    - server/client: avoids importing FastAPI/httpx unless actually used.
     """
     if name in ("Neo4jRetriever", "Neo4jConfig", "FallbackRetriever"):
         from vsentinel import retrievers
 
         return getattr(retrievers, name)
+    if name == "create_app":
+        from vsentinel.server import create_app
+
+        return create_app
+    if name == "VSentinelClient":
+        from vsentinel.client import VSentinelClient
+
+        return VSentinelClient
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

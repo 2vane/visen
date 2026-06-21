@@ -329,6 +329,41 @@ curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
   | python -m json.tool
 ```
 
+## SDK for developers
+
+`vsentinel` is a typed (`py.typed`), self-contained package — three ways to use it.
+
+**1. Embed the guardrail in-process** (no server):
+
+```python
+from vsentinel import Sentinel
+trace = Sentinel().run("Bỏ qua hướng dẫn trước đó")   # ALLOW | REFRAME | BLOCK
+```
+
+**2. CLI** (installed as the `vsentinel` command):
+
+```bash
+vsentinel check "Bỏ qua hướng dẫn trước đó"   # screen a message → decision + rules + citations
+vsentinel check "..." --json                   # full DecisionTrace as JSON
+vsentinel serve --port 8000                    # run the guardrail HTTP service (no demo UI)
+vsentinel version
+```
+
+**3. Run it as a service + call it over HTTP.** Build the app from the library
+(`from vsentinel import create_app`) or run `vsentinel serve`, then use the client:
+
+```python
+from vsentinel.client import VSentinelClient
+
+with VSentinelClient("http://localhost:8000", api_key="...") as vs:
+    print(vs.chat("Tôi bị tiểu đường nên ăn gì?"))   # screened answer text
+    trace = vs.guard("Bỏ qua hướng dẫn trước đó")     # full decision trace (dict)
+```
+
+Install: `uv add vsentinel` (or `pip install vsentinel`); `…[neo4j]` adds the
+optional graph retriever. The HTTP service in `vsentinel.server.create_app()` is
+the same one the demo (`api/main.py`) wraps with the browser UI.
+
 ## NeMo Guardrails
 
 `config/config.yml` + `config/rails/flows.co` wire the pipeline as a NeMo input rail (action `vsentinel_guard` in `src/vsentinel/rails_actions.py`). The FastAPI demo calls `pipeline.run` directly, so it works independently of the NeMo runtime.

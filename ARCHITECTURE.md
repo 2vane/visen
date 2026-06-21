@@ -1,6 +1,6 @@
 # V-Sentinel — Architecture, Models & Data Flow
 
-> As-built reference for the team. Matches the code on `dev`/`main` (131 tests passing).
+> As-built reference for the team. Matches the code on `dev`/`main` (144 tests passing).
 
 ## 1. What it is
 A guardrail layer between the user and a Vietnamese chatbot. Every user turn passes through a 5-stage pipeline that decides **ALLOW / REFRAME / BLOCK**, then (for non-blocked turns) generates an answer and re-checks the output. Every decision carries a `DecisionTrace` shown in the UI panel.
@@ -109,7 +109,8 @@ any `f(message) -> reply` function without modifying its signature.
 
 ### Example consumers
 
-- `api/main.py` — FastAPI web app (demo UI + `/chat`, the OpenAI-compatible proxy, and the `/recent` monitor feed)
+- `api/main.py` — thin demo: wraps the library service (`vsentinel.server.create_app`) and adds the browser UI at `/`
+- `vsentinel.server.create_app()` / `vsentinel serve` — the guardrail HTTP service itself (`/chat`, OpenAI + Ollama proxy, `/recent`), part of the SDK
 - `config/config.yml` + `config/rails/flows.co` — NeMo Guardrails wiring (optional)
 - `examples/` — runnable standalone examples (see README)
 
@@ -144,12 +145,17 @@ src/vsentinel/
   verify.py        Stage 4
   pipeline.py      orchestrates 0→5
   rails_actions.py NeMo action (example consumer)
-api/main.py          POST /chat, GET /, GET /recent  ← example consumer
-api/openai_compat.py OpenAI-compatible proxy (/v1/chat/completions, /v1/models)
-api/ollama_compat.py Ollama-native proxy shim (/api/chat, /api/tags, /api/version)
-api/proxy_common.py  shared chat-message model + latest-user extraction
-api/store.py         in-memory ring buffer powering the /recent monitor feed
-web/index.html       chat + guardrail panel + live-monitor toggle
+  cli.py           `vsentinel` CLI (check / serve / version)
+  client.py        VSentinelClient — HTTP client for a running service
+  py.typed         PEP 561 marker (ships type hints)
+  server/          the guardrail HTTP service (part of the SDK)
+    app.py            create_app() + build_default_sentinel() + auth/rate-limit
+    openai_compat.py  OpenAI proxy (/v1/chat/completions, /v1/models)
+    ollama_compat.py  Ollama proxy (/api/chat, /api/tags, /api/version)
+    proxy_common.py   shared chat-message model + latest-user extraction
+    store.py          in-memory ring buffer powering the /recent monitor feed
+api/main.py        thin demo: create_app(...) + GET / (web UI)  ← example consumer
+web/index.html     chat + guardrail panel + live-monitor toggle
 examples/          quickstart.py · offline_fake_backend.py · custom_backend.py · decorator.py
 eval/              run_eval.py · multijail_vi.py · xstest_vi.json
 config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
@@ -197,7 +203,7 @@ uv run uvicorn api.main:app --port 8000      # http://localhost:8000
 #   base URL http://localhost:8000/v1 · any api key · model qwen2.5
 # then click "👁 Theo dõi trực tiếp" on the dashboard to watch the traffic.
 
-uv run pytest -q                              # 131 tests
+uv run pytest -q                              # 144 tests
 
 # optional: real reranked citations over the Neo4j legal graph
 uv sync --extra neo4j && cp .env.example .env # then fill in NEO4J_* creds

@@ -1,7 +1,7 @@
 """Ollama-native chat endpoint, so Ollama-style clients (Enchanted, …) can route
 through V-Sentinel as a guardrail proxy.
 
-Mirrors ``api.openai_compat`` but speaks Ollama's wire format: ``/api/chat``
+Mirrors ``vsentinel.server.openai_compat`` but speaks Ollama's wire format: ``/api/chat``
 (NDJSON streaming, the Ollama default), ``/api/tags`` for model discovery, and
 ``/api/version``. Same scope: the guardrail acts on the latest user message and
 streaming replays the already-screened text.
@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from api.proxy_common import ChatMessage, last_user_message
+from vsentinel.server.proxy_common import ChatMessage, last_user_message
 
 _CHUNK = 24
 
