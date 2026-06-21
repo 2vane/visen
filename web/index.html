@@ -58,6 +58,12 @@
   .msg.clk{cursor:pointer}
   .msg.clk:hover{filter:brightness(.985)}
   .msg.sel{outline:2px solid var(--accent);outline-offset:1px}
+  /* rendered markdown inside assistant bubbles */
+  .msg.a strong{font-weight:700}
+  .msg.a em{font-style:italic}
+  .msg.a code{font-family:var(--mono);font-size:12.5px;background:#e3e8ef;padding:1px 5px;border-radius:4px}
+  .msg.a ul,.msg.a ol{margin:5px 0;padding-left:20px}
+  .msg.a li{margin:2px 0}
   #bar{display:flex;gap:9px;padding:12px;border-top:1px solid var(--line);background:#fbfcfe}
   #msg{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:9px;font-size:14.5px;font-family:inherit}
   #msg:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -213,13 +219,51 @@ function selectBubble(b, t){
   if(t) render(t);
 }
 
+// Minimal, XSS-safe markdown for assistant replies: escape first, then apply a
+// small subset (bold/italic/code/lists/line-breaks). The model's text is never
+// injected as raw HTML.
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function mdInline(s){
+  s = escapeHtml(s);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return s;
+}
+function renderMarkdown(src){
+  let html = '', list = null;
+  const closeList = () => { if(list){ html += '</' + list + '>'; list = null; } };
+  for(const raw of String(src).split('\n')){
+    const line = raw.replace(/\s+$/, '');
+    let m;
+    if(m = line.match(/^\s*[-*]\s+(.*)$/)){
+      if(list !== 'ul'){ closeList(); html += '<ul>'; list = 'ul'; }
+      html += '<li>' + mdInline(m[1]) + '</li>';
+    } else if(m = line.match(/^\s*\d+\.\s+(.*)$/)){
+      if(list !== 'ol'){ closeList(); html += '<ol>'; list = 'ol'; }
+      html += '<li>' + mdInline(m[1]) + '</li>';
+    } else if(line.trim() === ''){
+      closeList(); html += '<br>';
+    } else {
+      closeList(); html += '<div>' + mdInline(line) + '</div>';
+    }
+  }
+  closeList();
+  return html;
+}
+
 function addBubble(turn){
   const e = document.getElementById('empty'); if(e) e.remove();
   let cls = 'a';
   if(turn.role === 'user') cls = 'u';
   else if(turn.role === 'error') cls = 'err';
   else if(turn.blocked) cls = 'a blocked';
-  const d = el('div', 'msg ' + cls, turn.text);
+  const d = el('div', 'msg ' + cls);
+  if(turn.role === 'assistant') d.innerHTML = renderMarkdown(turn.text || '');
+  else d.textContent = turn.text || '';
   if(turn.role === 'assistant' && turn.trace){
     d.classList.add('clk');
     d.title = 'Xem lại chuỗi quyết định';
