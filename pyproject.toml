@@ -3,7 +3,8 @@ name = "vsentinel"
 version = "0.2.0"
 description = "V-Sentinel: dual-control guardrail (jailbreak + ND-142/2026 compliance) for Vietnamese chatbots"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     { name = "TyrusRC", email = "63230297+TyrusRC@users.noreply.github.com" }
 ]
