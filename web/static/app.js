@@ -195,14 +195,14 @@ function toggleMonitor(){
   monOn = !monOn;
   activeBubble = null; log.innerHTML = ''; trace.innerHTML = TRACE_PLACEHOLDER;
   if(monOn){
-    monBtn.classList.add('on'); monBtn.textContent = '● Đang theo dõi';
+    monBtn.classList.add('on'); document.getElementById('montxt').textContent = 'Đang theo dõi';
     input.disabled = sendBtn.disabled = true;
     input.placeholder = 'Chế độ theo dõi — gửi câu hỏi từ ứng dụng chat ngoài qua proxy';
     lastSeq = 0; seenSeq.clear();
     pollMonitor(); monTimer = setInterval(pollMonitor, 1500);
   }else{
     clearInterval(monTimer); monTimer = null;
-    monBtn.classList.remove('on'); monBtn.textContent = '👁 Theo dõi trực tiếp';
+    monBtn.classList.remove('on'); document.getElementById('montxt').textContent = 'Theo dõi trực tiếp';
     input.disabled = sendBtn.disabled = false;
     input.placeholder = 'Nhập câu hỏi…';
     restore(); input.focus();

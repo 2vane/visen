@@ -20,6 +20,10 @@
        padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s}
   .mon:hover{border-color:var(--accent);color:var(--accent)}
   .mon.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .mon .mdot{display:inline-block;width:8px;height:8px;border-radius:50%;
+             background:var(--allow);margin-right:7px;vertical-align:middle}
+  .mon.on .mdot{animation:mpulse 1.4s ease-in-out infinite}
+  @keyframes mpulse{0%,100%{opacity:1}50%{opacity:.35}}
   .health{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
   .dot{width:9px;height:9px;border-radius:50%;background:#9aa6b6}
   .dot.ok{background:var(--allow)} .dot.down{background:var(--block)}
