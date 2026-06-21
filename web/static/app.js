@@ -69,10 +69,14 @@ function escapeHtml(s){
 }
 function mdInline(s){
   s = escapeHtml(s);
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Pull code spans out to @@CODEn@@ placeholders so bold/italic can't format
+  // inside them; the token survives escaping and isn't matched by * / _ regexes.
+  const codes = [];
+  s = s.replace(/`([^`]+)`/g, (_m, p1) => { codes.push(p1); return '@@CODE' + (codes.length - 1) + '@@'; });
   s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  s = s.replace(/@@CODE(\d+)@@/g, (_m, i) => '<code>' + codes[+i] + '</code>');
   return s;
 }
 function renderMarkdown(src){
@@ -229,8 +233,8 @@ function render(t){
   v.appendChild(el('span', 'badge ' + t.decision, t.decision));
   const DOMAIN_VI = {public_service:'Dịch vụ công', education:'Giáo dục', healthcare:'Y tế', general:'Chung'};
   const cat = el('div','cat');
-  cat.innerHTML = 'Phân loại: <b>' + (risk.category||'—') + '</b> · Lĩnh vực: <b>'
-    + (DOMAIN_VI[t.domain] || t.domain || '—') + '</b>';
+  cat.innerHTML = 'Phân loại: <b>' + escapeHtml(risk.category||'—') + '</b> · Lĩnh vực: <b>'
+    + escapeHtml(DOMAIN_VI[t.domain] || t.domain || '—') + '</b>';
   v.appendChild(cat);
   if(ruleDriven){
     const bb = el('div','backbone'); bb.innerHTML = '⚙ Chặn bằng luật<br>không cần LLM';
