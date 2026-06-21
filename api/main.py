@@ -12,6 +12,15 @@ from fastapi.responses import HTMLResponse
 
 from vsentinel.server import create_app
 
+# Load .env for the demo before the app reads any VSENTINEL_*/NEO4J_* vars.
+# Demo-only convenience (the library never auto-loads .env); no-op if missing.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ModuleNotFoundError:
+    pass
+
 _WEB = Path(__file__).resolve().parents[1] / "web" / "index.html"
 
 # create_app builds + owns the sentinel (and closes its retriever on shutdown).

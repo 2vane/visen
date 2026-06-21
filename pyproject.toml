@@ -51,4 +51,5 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
     "respx>=0.23.1",
+    "python-dotenv>=1.0",
 ]
