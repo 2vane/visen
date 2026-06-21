@@ -1,17 +1,27 @@
 from __future__ import annotations
+import logging
 import os
 import re
 from vsentinel.ollama_client import chat, OllamaError
 
+LOGGER = logging.getLogger("vsentinel.generate")
+
 _FALLBACK = "Xin lỗi, hệ thống tạm thời không thể trả lời. Vui lòng thử lại sau."
+
+# The assistant's identity line. Exported so the output-leak check in verify.py
+# detects an echo of it without re-hardcoding the string (single source of truth).
+ASSISTANT_IDENTITY = "Bạn là trợ lý dịch vụ công Việt Nam"
+_SYSTEM_PROMPT = ASSISTANT_IDENTITY + ", trả lời bằng tiếng Việt."
 
 # Full-answer generation is far slower than the one-word classifier, especially
 # on CPU / small GPUs. Default 60s (env-overridable) so weak demo boxes finish
 # instead of timing out; harmless on fast hardware where generation is seconds.
 def _default_timeout() -> float:
+    raw = os.environ.get("VSENTINEL_GEN_TIMEOUT", "60")
     try:
-        return float(os.environ.get("VSENTINEL_GEN_TIMEOUT", "60"))
+        return float(raw)
     except ValueError:
+        LOGGER.warning("VSENTINEL_GEN_TIMEOUT=%r is not a number; using 60s.", raw)
         return 60.0
 
 # Retrieved legal text is UNTRUSTED data: a poisoned articles file or a
@@ -43,7 +53,7 @@ def answer(
     timeout: float | None = None,
 ) -> str:
     context = "\n".join(f"- {_flatten(a.ref)}: {_flatten(a.snippet)}" for a in articles)
-    system = "Bạn là trợ lý dịch vụ công Việt Nam, trả lời bằng tiếng Việt."
+    system = _SYSTEM_PROMPT
     if safety_directive:
         system += "\n" + safety_directive
     if context:

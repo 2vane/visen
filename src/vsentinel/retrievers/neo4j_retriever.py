@@ -33,6 +33,9 @@ class Neo4jRetriever:
         self.config = config or Neo4jConfig.from_env()
         self._embedder = embedder
         self._driver = driver
+        # We can only rebuild a driver we constructed ourselves; an injected one
+        # has no factory, so on reconnect we just re-open it instead.
+        self._owns_driver = driver is None
         self._translator = translator
         self._reranker = reranker
         self._connected = False
@@ -120,13 +123,20 @@ class Neo4jRetriever:
         return variants
 
     def _reconnect(self) -> None:
-        """Drop a stale connection so the next ``_ensure_driver`` reconnects."""
+        """Drop a stale connection so the next ``_ensure_driver`` reconnects.
+
+        For a driver we own, close it AND null it so ``_ensure_driver`` builds a
+        fresh one — calling ``connect()``/``verify_connectivity()`` on an
+        already-closed Neo4j driver would raise. An injected driver can't be
+        rebuilt, so we leave it in place and just re-open it.
+        """
         self._connected = False
-        if self._driver is not None:
+        if self._driver is not None and self._owns_driver:
             try:
                 self._driver.close()
             except Exception as exc:  # closing a dead driver is best-effort
                 LOGGER.warning("Lỗi khi đóng driver cũ: %s", exc)
+            self._driver = None
         self._ensure_driver()
 
     def _collect_rows(

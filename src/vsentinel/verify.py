@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+from vsentinel.generate import ASSISTANT_IDENTITY
 from vsentinel.guard_client import classify
 from vsentinel.normalize import fold_diacritics
 from vsentinel.pii import detect_pii, redact
@@ -10,14 +11,15 @@ _BLOCKED_MSG = "Phản hồi đã bị chặn do vi phạm chính sách an toàn
 # High-precision markers that a generated answer is leaking the system prompt /
 # its own instructions. Matched against diacritic-folded, lowercased text. Kept
 # narrow so benign answers that merely mention "system" (e.g. "hệ thống y tế")
-# are not blocked.
+# are not blocked. The identity echo is derived from generate.ASSISTANT_IDENTITY
+# so the two never drift apart.
 _LEAK_PATTERNS = [
     re.compile(p)
     for p in (
         r"(he thong|system).{0,12}(prompt|instruction|cau lenh)",
         r"my (system )?(instruction|prompt)s? (are|is)",
         r"toi duoc (huong dan|chi dinh) (la|rang)",
-        r"ban la tro ly dich vu cong",
+        re.escape(fold_diacritics(ASSISTANT_IDENTITY)),
     )
 ]
 

@@ -10,8 +10,18 @@ from __future__ import annotations
 from vsentinel.schema import DecisionTrace
 from vsentinel.sentinel import Sentinel
 
-_SENTINEL = Sentinel()
+# Built lazily on first use so importing this module has no side effects (no disk
+# I/O, no backend config) and env overrides set before the first call are honored.
+# Tests patch `_SENTINEL` directly to inject offline backends.
+_SENTINEL: Sentinel | None = None
+
+
+def _get_sentinel() -> Sentinel:
+    global _SENTINEL
+    if _SENTINEL is None:
+        _SENTINEL = Sentinel()
+    return _SENTINEL
 
 
 def run(user_text: str) -> DecisionTrace:
-    return _SENTINEL.run(user_text)
+    return _get_sentinel().run(user_text)

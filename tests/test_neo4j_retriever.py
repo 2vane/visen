@@ -198,6 +198,46 @@ def test_search_recovers_after_reconnect():
     assert driver.search_calls == 2   # failed once, retried once
 
 
+def test_reconnect_rebuilds_internally_owned_driver(monkeypatch):
+    """An owned (non-injected) driver is closed AND rebuilt on reconnect.
+
+    Regression test: a real Neo4j driver raises if connect()/verify_connectivity
+    is called after close(), so _reconnect must null the old driver so a fresh
+    one is constructed — not reuse the closed object.
+    """
+    built = []
+
+    class _OwnedDriver:
+        def __init__(self, config):
+            built.append(self)
+            self.closed = False
+
+        def connect(self):
+            assert not self.closed, "connect() called on a closed driver"
+
+        def close(self):
+            self.closed = True
+
+        def online_vector_indexes(self):
+            return {"legal_embedding_index": "ONLINE"}
+
+        def vector_search(self, **kwargs):
+            if self is built[0]:
+                raise RuntimeError("connection reset by peer")
+            return _FakeDriver().vector_search(**kwargs)
+
+    monkeypatch.setattr("vsentinel.retrievers.driver.Neo4jDriver", _OwnedDriver)
+    config = Neo4jConfig(uri="x", username="u", password="p",
+                         dual_query=False, rerank=False, law="vn")
+    retriever = Neo4jRetriever(config=config, embedder=_FakeEmbedder())  # owns its driver
+
+    articles = retriever.search("Trách nhiệm của nhà cung cấp?", k=1)
+
+    assert articles                 # recovered after rebuild
+    assert len(built) == 2          # a fresh driver was constructed on reconnect
+    assert built[0].closed is True  # the stale driver was closed
+
+
 def test_search_raises_when_no_index_online():
     class _OfflineDriver(_FakeDriver):
         def online_vector_indexes(self) -> dict[str, str]:

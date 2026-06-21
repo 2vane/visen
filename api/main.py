@@ -1,6 +1,8 @@
 from __future__ import annotations
+import hmac
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -47,7 +49,11 @@ def _build_sentinel() -> Sentinel:
 sentinel = _build_sentinel()
 
 # Per-client fixed-window rate-limit state: client -> (window_start, count).
+# Guarded by a lock since sync handlers run in a threadpool; pruned each request
+# so the map can't grow unbounded with one-shot clients.
 _RATE_BUCKETS: dict[str, tuple[float, int]] = {}
+_RATE_LOCK = threading.Lock()
+_WINDOW = 60.0
 
 
 def _enforce_limits(
@@ -59,7 +65,7 @@ def _enforce_limits(
     - VSENTINEL_RATE_LIMIT=N (per minute, >0) => simple per-client throttle.
     """
     api_key = os.environ.get("VSENTINEL_API_KEY")
-    if api_key and x_api_key != api_key:
+    if api_key and not hmac.compare_digest(x_api_key or "", api_key):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     try:
@@ -69,12 +75,15 @@ def _enforce_limits(
     if limit > 0:
         client = request.client.host if request.client else "unknown"
         now = time.monotonic()
-        window_start, count = _RATE_BUCKETS.get(client, (now, 0))
-        if now - window_start >= 60.0:
-            window_start, count = now, 0
-        count += 1
-        _RATE_BUCKETS[client] = (window_start, count)
-        if count > limit:
+        with _RATE_LOCK:
+            # Evict expired windows (incl. this client's own, so it resets).
+            for ip in [ip for ip, (ws, _) in _RATE_BUCKETS.items() if now - ws >= _WINDOW]:
+                del _RATE_BUCKETS[ip]
+            window_start, count = _RATE_BUCKETS.get(client, (now, 0))
+            count += 1
+            _RATE_BUCKETS[client] = (window_start, count)
+            exceeded = count > limit
+        if exceeded:
             raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
 
