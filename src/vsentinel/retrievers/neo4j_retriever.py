@@ -228,7 +228,7 @@ class Neo4jRetriever:
 
     # Maps the internal corpus key to the Citation.source label so downstream
     # policy citations are attributed to the right law, not a hardcoded decree.
-    _CORPUS_SOURCE = {"vn": "ND142/2026", "ferpa": "FERPA", "coppa": "COPPA"}
+    _CORPUS_SOURCE = {"vn": "ND142/2026", "ferpa": "FERPA", "coppa": "COPPA", "hipaa": "HIPAA"}
 
     def _to_article(self, row: dict) -> Article:
         ref = clean_text(row.get("citation")) or clean_text(row.get("document_citation"))

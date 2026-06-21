@@ -2,7 +2,7 @@
 # citation matches the jurisdiction of the data at stake. Attacks keep the
 # domain-agnostic OWASP frame (see legal_policy.yml).
 healthcare:
-  - { source: GDPR, ref: "Art. 9", text: "Dữ liệu nhạy cảm về sức khỏe (special-category data)" }
+  - { source: HIPAA, ref: "45 CFR Part 164", text: "Bảo vệ thông tin sức khỏe (Protected Health Information)" }
   - { source: PDPD, ref: "Điều 2.4", text: "Dữ liệu cá nhân nhạy cảm — thông tin sức khỏe" }
 education:
   - { source: FERPA, ref: "20 U.S.C. §1232g", text: "Quyền riêng tư đối với hồ sơ giáo dục học sinh" }

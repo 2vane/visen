@@ -164,7 +164,7 @@ deployment/demo at different models or hardware without code changes:
 ### Neo4j legal retrieval (optional)
 
 The default retriever is offline BM25 over the packaged decree seed. For **real,
-reranked citations** over a legal-knowledge graph (ND-142/2026 + FERPA + COPPA,
+reranked citations** over a legal-knowledge graph (ND-142/2026 + FERPA + COPPA + HIPAA,
 embedded with `BAAI/bge-m3` in Neo4j AuraDB), inject the optional `Neo4jRetriever`:
 
 ```bash
@@ -215,7 +215,7 @@ uv run python examples/offline_fake_backend.py   # no Ollama required
 1. **Jailbreak / prompt-injection detection** — context-aware, Vietnamese-first.
 2. **Legal & safety compliance** — aligned to **Nghị định 142/2026/NĐ-CP**, the implementing decree for Vietnam's AI Law (Luật Trí tuệ nhân tạo, Luật 63/2025/QH15).
 
-Unlike Western guardrails that either leak on non-English jailbreaks or **over-refuse** sensitive-but-legal questions, V-Sentinel blocks genuine attacks, *reframes* sensitive-but-legal questions so they get a helpful answer, and cites the legal/standard basis for every decision — **per domain** (education cites FERPA/COPPA, healthcare cites GDPR/PDPD, public services cite PDPD/ND-142), so the jurisdiction always matches the data at stake.
+Unlike Western guardrails that either leak on non-English jailbreaks or **over-refuse** sensitive-but-legal questions, V-Sentinel blocks genuine attacks, *reframes* sensitive-but-legal questions so they get a helpful answer, and cites the legal/standard basis for every decision — **per domain** (education cites FERPA/COPPA, healthcare cites HIPAA/PDPD, public services cite PDPD/ND-142), so the jurisdiction always matches the data at stake.
 
 ## Five-stage pipeline
 
@@ -227,7 +227,7 @@ User input
               deterministic rules (backbone; base64 + VN/EN/CJK patterns)
               + LLM classifier severity (qwen2.5; pluggable guard model)
 ▼ STAGE 2 · Policy engine                 (policy.py + domains.py + pii.py + retrieve.py)
-              domain-aware legal framing — education→FERPA/COPPA, health→GDPR/PDPD,
+              domain-aware legal framing — education→FERPA/COPPA, health→HIPAA/PDPD,
               public-service→PDPD/ND-142, attacks→OWASP; BM25 cites the article
               → decision: ALLOW | REFRAME | BLOCK
 ▼ STAGE 3 · Generation                    (generate.py)    chatbot answers (Qwen2.5)
@@ -403,7 +403,7 @@ Policy files and decree data are packaged inside the library under
 |------|---------|
 | `src/vsentinel/resources/policy/jailbreak_patterns.yml` | VN+EN+CJK jailbreak/injection regex, OWASP-tagged (base64 decoded too) |
 | `src/vsentinel/resources/policy/legal_policy.yml` | categories → ND-142/2026 `Điều/Khoản` + OWASP tags + action |
-| `src/vsentinel/resources/policy/domain_policy.yml` | per-domain legal framing (education→FERPA/COPPA, health→GDPR/PDPD, public-service→PDPD/ND-142) |
+| `src/vsentinel/resources/policy/domain_policy.yml` | per-domain legal framing (education→FERPA/COPPA, health→HIPAA/PDPD, public-service→PDPD/ND-142) |
 | `src/vsentinel/resources/policy/pii_recognizers.yml` | Vietnamese PII regex + context gating (CCCD/CMND/phone/MST/BHXH/passport/bank account/email) |
 | `src/vsentinel/resources/policy/reframe_templates.yml` | safe-rewrite templates for sensitive-but-legal topics |
 | `src/vsentinel/resources/data/decree_articles.json` | OCR'd ND-142/2026 articles for citation/RAG |

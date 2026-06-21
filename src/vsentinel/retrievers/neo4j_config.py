@@ -46,6 +46,18 @@ CORPORA: dict[str, dict[str, str]] = {
         "jurisdiction": "US-FEDERAL",
         "language": "en",
     },
+    # Health-data framework for VN healthcare queries (no dedicated VN statute).
+    # Activates automatically once the hipaa_embedding_index exists in Neo4j;
+    # until then it's skipped (online-index check), so this is safe to ship early.
+    "hipaa": {
+        "name": "Health Insurance Portability and Accountability Act (Privacy Rule)",
+        "short_name": "HIPAA",
+        "index": "hipaa_embedding_index",
+        "document_id": "us-hipaa-45-cfr-part-164",
+        "citation": "45 CFR Part 164",
+        "jurisdiction": "US-FEDERAL",
+        "language": "en",
+    },
 }
 
 # Keyword cues that route a free-text question to the most relevant corpus.
@@ -109,6 +121,30 @@ ROUTER_TERMS: dict[str, tuple[str, ...]] = {
         "personal information",
         "ứng dụng học tập",
         "educational app",
+    ),
+    "hipaa": (
+        "hipaa",
+        "45 cfr part 164",
+        "45 cfr 164",
+        "protected health information",
+        "phi",
+        "medical record",
+        "medical records",
+        "health record",
+        "covered entity",
+        "patient privacy",
+        "health data",
+        "hồ sơ y tế",
+        "hồ sơ bệnh án",
+        "bệnh án",
+        "thông tin sức khỏe",
+        "dữ liệu sức khỏe",
+        "bệnh nhân",
+        "khám bệnh",
+        "bệnh viện",
+        "sức khỏe",
+        "y tế",
+        "bảo mật thông tin y tế",
     ),
 }
 

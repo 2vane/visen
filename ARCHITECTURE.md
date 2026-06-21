@@ -14,7 +14,7 @@ A guardrail layer between the user and a Vietnamese chatbot. Every user turn pas
 | **Jailbreak rules** | regex/keyword (no model) | Stage 1 **backbone** — decides even if Ollama is offline | Always available |
 | **PII** | regex + context-gating (no model) | Stage 2 + Stage 4 (CCCD/CMND/phone/MST/email) | Deterministic |
 | **Legal retrieval** | BM25 (`rank_bm25`, no model) — *default* | Stage 2 — cites the matching decree article | Deterministic |
-| **Legal retrieval (optional)** | `bge-m3` + Neo4j AuraDB + cross-encoder rerank | Stage 2 — real reranked citations over ND-142 + FERPA + COPPA graph | Injected via `Sentinel(retriever=Neo4jRetriever())` |
+| **Legal retrieval (optional)** | `bge-m3` + Neo4j AuraDB + cross-encoder rerank | Stage 2 — real reranked citations over ND-142 + FERPA + COPPA + HIPAA graph | Injected via `Sentinel(retriever=Neo4jRetriever())` |
 
 **Key design principle:** deterministic layers (rules, PII, BM25) are the backbone; the two LLMs are a *second opinion*. Attacks are blocked even with no LLM running.
 
@@ -43,7 +43,7 @@ user message
   │              illegal         → BLOCK   (+ ND142 + per-domain framework)
   │              sensitive_legal → REFRAME (+ reframe directive + per-domain framework)
   │              benign          → ALLOW   (no citation)
-  │            per-domain framework: education→FERPA/COPPA · health→GDPR/PDPD · public-service→PDPD/ND142
+  │            per-domain framework: education→FERPA/COPPA · health→HIPAA/PDPD · public-service→PDPD/ND142
   │
   ├── decision == BLOCK ──► short-circuit: final_message = refusal, return  (NO chatbot call)
   │
@@ -176,7 +176,7 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 - **Generation/output screening fail closed** — `Sentinel.run` guards the chatbot call (→ safe Vietnamese fallback) and the output check (→ BLOCK) so a backend exception can't crash a turn.
 - **Detection breadth** — base64-encoded payloads are decoded from the *raw* message and re-scanned (normalize lowercases, so decoding must precede it); added high-precision Chinese/Indonesian "ignore instructions" patterns; prefix-injection now tolerates a leading directive.
 - **Non-destructive normalization** — leet-decoding no longer rewrites the canonical text (it corrupted legitimate numerics like `70kg`→`tokg`); `normalize` only *flags* in-word leet, and `score_rules` decodes leet as a scan-only target — so retrieval, the trace, and the user-visible text stay intact while detection still fires on `1gn0r3 4ll …`.
-- **Domain-aware legal framing** — `decide` attaches the jurisdiction matching the data at stake (education→FERPA/COPPA, health→GDPR/PDPD, public-service→PDPD/ND-142; attacks stay OWASP-only), fixing wrong-jurisdiction citations (e.g. an education turn no longer cited health GDPR). Citations are de-duped.
+- **Domain-aware legal framing** — `decide` attaches the jurisdiction matching the data at stake (education→FERPA/COPPA, health→HIPAA/PDPD, public-service→PDPD/ND-142; attacks stay OWASP-only), fixing wrong-jurisdiction citations (e.g. an education turn no longer cited the wrong health framework). Citations are de-duped.
 - **Guardrail proxy** — OpenAI-compatible (`/v1/chat/completions`, `/v1/models`) and Ollama-native (`/api/chat`, `/api/tags`) endpoints let any chat client (Open WebUI, Jan, Codex CLI, Enchanted, …) route through V-Sentinel; the screened answer is returned in the client's wire format, every decision is recorded to `/recent`, and the web UI doubles as a live monitor.
 - **PII** — added BHXH / passport / bank-account recognizers; context match is now bidirectional + word-boundary + diacritic-folded (catches keyword-after-number, kills substring false positives).
 - **Output check** — now flags system-prompt leakage in the generated answer.

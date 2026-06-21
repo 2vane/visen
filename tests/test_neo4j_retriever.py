@@ -285,7 +285,7 @@ def test_auto_routing_uses_fallback_when_uncertain():
 def test_auto_routing_without_fallback_queries_all():
     """No fallback => uncertain queries still fan out to every corpus."""
     selected, _ = select_corpora("xin chào buổi sáng", "auto")
-    assert set(selected) == {"vn", "ferpa", "coppa"}
+    assert set(selected) == {"vn", "ferpa", "coppa", "hipaa"}
 
 
 def test_explicit_keyword_still_routes_to_its_corpus():
@@ -334,3 +334,20 @@ def test_from_env_device_defaults_auto(monkeypatch):
     monkeypatch.delenv("VSENTINEL_EMBED_DEVICE", raising=False)
     cfg = Neo4jConfig.from_env()
     assert cfg.device == "auto"
+
+
+def test_router_routes_vn_health_to_hipaa():
+    """VN health queries route to the HIPAA corpus (no dedicated VN health statute)."""
+    from vsentinel.retrievers.fusion import select_corpora
+    from vsentinel.retrievers.neo4j_config import CORPORA
+
+    assert "hipaa" in CORPORA and CORPORA["hipaa"]["index"] == "hipaa_embedding_index"
+    sel, _ = select_corpora("xem hồ sơ bệnh án và thông tin sức khỏe của bệnh nhân", "auto")
+    assert "hipaa" in sel
+
+
+def test_router_routes_vn_education_to_ferpa():
+    from vsentinel.retrievers.fusion import select_corpora
+
+    sel, _ = select_corpora("quyền của phụ huynh xem hồ sơ học bạ của học sinh", "auto")
+    assert "ferpa" in sel

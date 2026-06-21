@@ -69,7 +69,7 @@ def test_decide_education_cites_ferpa_not_health():
 def test_decide_healthcare_cites_health_law():
     _, policy, _ = decide("sensitive_legal", "controversial", R, domain="healthcare")
     sources = {c.source for c in policy.citations}
-    assert "GDPR" in sources and "PDPD" in sources
+    assert "HIPAA" in sources and "PDPD" in sources
     assert "FERPA" not in sources
 
 

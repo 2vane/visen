@@ -12,7 +12,7 @@ class RuleHit(BaseModel):
     owasp_tag: str = ""
 
 class Citation(BaseModel):
-    source: Literal["ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA"]
+    source: Literal["ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA", "HIPAA"]
     ref: str
     text: str = ""
 

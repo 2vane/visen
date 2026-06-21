@@ -9,7 +9,7 @@ _DOMAIN_POLICY = policy_file("domain_policy.yml")
 
 # Sources a retriever may tag on an Article; anything else falls back to the
 # decree so a Citation never violates its source enum.
-_ALLOWED_SOURCES = {"ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA"}
+_ALLOWED_SOURCES = {"ND142/2026", "PDPD", "GDPR", "OWASP", "FERPA", "COPPA", "HIPAA"}
 
 # Categories that get domain-specific legal framing (attacks keep OWASP only).
 _DOMAIN_AWARE = {"sensitive_legal", "illegal"}
