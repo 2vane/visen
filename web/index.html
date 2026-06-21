@@ -446,6 +446,23 @@ function render(t){
   } else cs.appendChild(el('div','none','Không trích dẫn (lượt không nhạy cảm)'));
   trace.appendChild(cs);
 
+  // ---- retrieved docs: provenance proves whether Neo4j (graph) actually served ----
+  const arts = t.retrieved_articles || [];
+  if(arts.length){
+    const rs2 = section('Tài liệu truy xuất (RAG)');
+    arts.forEach(a => {
+      const card = el('div','cite');
+      const fromGraph = !!a.source;
+      const tag = el('span','src', fromGraph ? (a.source + ' · Neo4j vector') : 'BM25 lexical');
+      if(!fromGraph) tag.style.background = '#5b6678';
+      card.appendChild(tag);
+      card.appendChild(el('div','ref', a.ref || ''));
+      if(a.snippet) card.appendChild(el('div','txt', a.snippet.slice(0,120)));
+      rs2.appendChild(card);
+    });
+    trace.appendChild(rs2);
+  }
+
   // ---- output screening (Stage 4) ----
   if(t.output_check){
     const os = section('Kiểm tra đầu ra (Tầng 4)');
