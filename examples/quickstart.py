@@ -1,8 +1,7 @@
 """Quickstart: run V-Sentinel with default Ollama backends.
 
 Prerequisites:
-    ollama pull qwen2.5
-    ollama pull qwen3guard
+    ollama pull qwen2.5     # used for both chatbot and safety classifier
     uv sync
 
 Run:

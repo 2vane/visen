@@ -22,7 +22,7 @@ uv add .          # or: pip install -e .
 ```python
 from vsentinel import Sentinel
 
-s = Sentinel()                          # defaults: local Ollama (qwen2.5 + qwen3guard)
+s = Sentinel()                          # defaults: local Ollama (qwen2.5 for chat + classifier)
 trace = s.run("Giờ làm việc của bệnh viện?")
 print(trace.decision)                   # ALLOW | REFRAME | BLOCK
 print(trace.final_message)             # the (possibly reframed/redacted) reply
@@ -122,7 +122,7 @@ from vsentinel import SentinelConfig
 config = SentinelConfig(
     ollama_url="http://localhost:11434",   # ignored when custom backends injected
     chat_model="qwen2.5",
-    guard_model="qwen3guard",
+    guard_model="qwen2.5",                 # designed for Qwen3Guard-Gen; not on Ollama registry
     attack_threshold=0.8,                  # rule_score >= this → BLOCK (attack)
     retrieve_k=2,                          # legal articles retrieved for grounding
     articles_path=None,                    # None → packaged decree data
@@ -209,16 +209,16 @@ Deterministic rules are the **backbone** — they decide even when the LLM is of
 
 ## Tech stack
 
-Python 3.13 (uv) · NeMo Guardrails · Ollama (`qwen2.5` chatbot + `qwen3guard` classifier) · regex+context PII · `rank_bm25` (RAG citation) · FastAPI + vanilla-JS UI · pytest.
+Python 3.13 (uv) · NeMo Guardrails · Ollama (`qwen2.5` chatbot + classifier; designed for Qwen3Guard-Gen) · regex+context PII · `rank_bm25` (RAG citation) · FastAPI + vanilla-JS UI · pytest.
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/)
 - [Ollama](https://ollama.com/) running locally, with the models pulled:
   ```bash
-  ollama pull qwen2.5
-  ollama pull qwen3guard      # Qwen3Guard-Gen safety classifier (Vietnamese-capable)
+  ollama pull qwen2.5         # chatbot + safety classifier (one model)
   ```
+  > The classifier is *designed* for **Qwen3Guard-Gen** (multilingual, safe/controversial/unsafe), but it is not on the Ollama registry, so by default V-Sentinel uses `qwen2.5` for the classifier too (the prompt is model-agnostic). Point it at a dedicated guard with `VSENTINEL_GUARD_MODEL=...` once available.
   > If a model is unavailable, V-Sentinel degrades gracefully: the guard fails safe to `controversial` (→ REFRAME) and the chatbot returns a Vietnamese fallback message — the deterministic rules still block attacks.
 
 ## Setup

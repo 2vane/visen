@@ -1,6 +1,6 @@
 # V-Sentinel — Architecture, Models & Data Flow
 
-> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (52 tests passing).
+> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (112 tests passing).
 
 ## 1. What it is
 A guardrail layer between the user and a Vietnamese chatbot. Every user turn passes through a 5-stage pipeline that decides **ALLOW / REFRAME / BLOCK**, then (for non-blocked turns) generates an answer and re-checks the output. Every decision carries a `DecisionTrace` shown in the UI panel.
@@ -10,7 +10,7 @@ A guardrail layer between the user and a Vietnamese chatbot. Every user turn pas
 | Role | Model / engine | How it's used | Fail behavior |
 |------|----------------|---------------|---------------|
 | **Chatbot** | `qwen2.5` (Ollama) | Generates the answer in Stage 3, with a safety system-prompt + retrieved legal context | On error → Vietnamese fallback message |
-| **Safety classifier** | `qwen3guard` / Qwen3Guard-Gen (Ollama) | Stage 1 + Stage 4: returns `safe` / `controversial` / `unsafe` | On error/garbage → `controversial` (fail-safe, never silent `safe`) |
+| **Safety classifier** | `qwen2.5` (Ollama); *designed for* Qwen3Guard-Gen | Stage 1 + Stage 4: returns `safe` / `controversial` / `unsafe` | On error/garbage → `controversial` (fail-safe, never silent `safe`) |
 | **Jailbreak rules** | regex/keyword (no model) | Stage 1 **backbone** — decides even if Ollama is offline | Always available |
 | **PII** | regex + context-gating (no model) | Stage 2 + Stage 4 (CCCD/CMND/phone/MST/email) | Deterministic |
 | **Legal retrieval** | BM25 (`rank_bm25`, no model) — *default* | Stage 2 — cites the matching decree article | Deterministic |
@@ -46,7 +46,7 @@ user message
   ▼ STAGE 3  retrieve articles (BM25) → answer(msg, directive, articles)  [qwen2.5]
   │            (REFRAME injects the "answer responsibly, don't over-refuse" directive)
   │
-  ▼ STAGE 4  check_output(reply)  [qwen3guard + PII]
+  ▼ STAGE 4  check_output(reply)  [qwen2.5 classifier + PII]
   │              unsafe → BLOCK (decision overridden to BLOCK)
   │              PII    → REDACT (mask spans)
   │              else   → ALLOW
@@ -124,7 +124,7 @@ src/vsentinel/
   schema.py        DecisionTrace + sub-models (shared contract)
   normalize.py     Stage 0
   detect.py        Stage 1 rules
-  guard_client.py  Stage 1/4 Qwen3Guard (Ollama)
+  guard_client.py  Stage 1/4 safety classifier (Ollama; qwen2.5, designed for Qwen3Guard)
   ollama_client.py Qwen2.5 transport
   pii.py           Stage 2/4 PII
   retrieve.py      Stage 2 BM25 (default retriever)
@@ -153,21 +153,33 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
   - the "Policy Leverage" report + demo video
 
 ## 8. Honest gaps to discuss
-- **Default BM25 citations are seed placeholders** — but the optional `Neo4jRetriever` now serves *real* reranked citations over the teammate's ND-142 + FERPA + COPPA knowledge graph (`bge-m3` embeddings in AuraDB). Verified live. Remaining: decide whether Neo4j should back the demo, or fold its articles into the offline BM25 seed so the default also cites real text.
-- **AuraDB Cypher uses `db.index.vector.queryNodes`**, which AuraDB now flags as deprecated in favor of `SEARCH` — works today, worth migrating.
-- **Single-message scope** — no multi-turn/crescendo attack detection (deliberate YAGNI for the MVP).
-- **`illegal` vs `attack`** currently split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm this heuristic matches how the block should be framed legally. (Note: a spurious rule hit shadows `illegal` toward `attack`; keep rule precision high — see the `persona_dan`/"hướng dẫn" fix.)
-- **Cross-law retrieval relevance** — *addressed*: uncertain Vietnamese queries now route to the VN decree only (`default_corpus="vn"`, language-gated), and a `min_reranker_score` floor (demo default 0.3 via `VSENTINEL_MIN_RERANK`) drops off-topic hits so an irrelevant question returns *no* citation instead of mislabeled US law. Verified live: health/benign → 0 citations, AI-duty query → ND-142, English FERPA query → FERPA. FERPA/COPPA remain reachable via keywords or explicit `law=`.
-- Eval numbers need the real MultiJail-vi / XSTest-vi files to be meaningful.
+
+### Hardened (production gap sweep)
+- **Retrieval degrades, never crashes** — the Neo4j path is wrapped in `FallbackRetriever(Neo4jRetriever, Retriever)`: any failure (connection loss, offline index, model load) falls back to offline BM25 instead of 500-ing the request. The Neo4j retriever also reconnects+retries once on a dropped connection.
+- **Generation/output screening fail closed** — `Sentinel.run` guards the chatbot call (→ safe Vietnamese fallback) and the output check (→ BLOCK) so a backend exception can't crash a turn.
+- **Detection breadth** — base64-encoded payloads are decoded from the *raw* message and re-scanned (normalize lowercases, so decoding must precede it); added high-precision Chinese/Indonesian "ignore instructions" patterns; prefix-injection now tolerates a leading directive.
+- **PII** — added BHXH / passport / bank-account recognizers; context match is now bidirectional + word-boundary + diacritic-folded (catches keyword-after-number, kills substring false positives).
+- **Output check** — now flags system-prompt leakage in the generated answer.
+- **Prompt-injection via retrieved text** — article snippets are flattened, length-clamped, and fenced as untrusted reference data in the system prompt.
+- **API** — bounded input (`max_length`), generic 500 handler (no stack-trace leak), `/health`, request/decision logging, and env-gated optional API-key + in-memory rate limit (off by default). Startup degrades to BM25 if Neo4j is unreachable.
+- **Config validation** — `SentinelConfig`/`Neo4jConfig` reject out-of-range values at construction.
+- **Cross-law retrieval relevance** — uncertain Vietnamese queries route to the VN decree only (`default_corpus="vn"`, language-gated); a `min_reranker_score` floor (demo default 0.3 via `VSENTINEL_MIN_RERANK`) drops off-topic hits. Verified live: health/benign → 0 citations, AI-duty → ND-142, English FERPA → FERPA. Language detection now folds diacritics so unaccented Vietnamese routes correctly.
+
+### Still open (deliberately deferred)
+- **Default BM25 citations are seed placeholders** — the optional `Neo4jRetriever` serves real reranked citations; remaining choice is whether Neo4j backs the demo or its articles get folded into the BM25 seed.
+- **AuraDB Cypher uses `db.index.vector.queryNodes`** (deprecated in favor of `SEARCH`) — works on 5.x; migrating needs a live AuraDB verification pass, so left until creds are rotated and re-tested.
+- **Single-message scope** — no multi-turn/crescendo detection (changes the architecture; YAGNI for the MVP).
+- **`illegal` vs `attack`** split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm the heuristic matches the intended legal framing (a spurious rule hit shadows `illegal`→`attack`; keep rule precision high).
+- **Eval numbers need real MultiJail-vi / XSTest-vi data** to be meaningful — current files are small placeholders.
 
 ## 9. Run
 
 ```bash
 # live demo (needs Ollama)
-ollama pull qwen2.5 && ollama pull qwen3guard
+ollama pull qwen2.5          # chatbot + classifier (Qwen3Guard-Gen not on Ollama registry)
 uv run uvicorn api.main:app --port 8000      # http://localhost:8000
 
-uv run pytest -q                              # 52 tests
+uv run pytest -q                              # 112 tests
 
 # optional: real reranked citations over the Neo4j legal graph
 uv sync --extra neo4j && cp .env.example .env # then fill in NEO4J_* creds
