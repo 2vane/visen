@@ -1,6 +1,6 @@
 # V-Sentinel — Architecture, Models & Data Flow
 
-> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (112 tests passing).
+> As-built reference for the team. Matches the code on `feat/v-sentinel-mvp` (114 tests passing).
 
 ## 1. What it is
 A guardrail layer between the user and a Vietnamese chatbot. Every user turn passes through a 5-stage pipeline that decides **ALLOW / REFRAME / BLOCK**, then (for non-blocked turns) generates an answer and re-checks the output. Every decision carries a `DecisionTrace` shown in the UI panel.
@@ -170,7 +170,7 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 - **AuraDB Cypher uses `db.index.vector.queryNodes`** (deprecated in favor of `SEARCH`) — works on 5.x; migrating needs a live AuraDB verification pass, so left until creds are rotated and re-tested.
 - **Single-message scope** — no multi-turn/crescendo detection (changes the architecture; YAGNI for the MVP).
 - **`illegal` vs `attack`** split on "did a jailbreak rule fire" vs. "just unsafe content" — confirm the heuristic matches the intended legal framing (a spurious rule hit shadows `illegal`→`attack`; keep rule precision high).
-- **Eval numbers need real MultiJail-vi / XSTest-vi data** to be meaningful — current files are small placeholders.
+- **Eval is unified and domain-aware, data still modest** — `eval.run_eval` now runs the hardened `Sentinel` path over a 47/47 attack/benign set across public-service/education/healthcare and reports `over_refusal_by_domain`, `detection_by_domain` and a fail-safe (LLM-down) rate. For headline report numbers, scale the MultiJail-vi / XSTest-vi sets further.
 
 ## 9. Run
 
@@ -179,7 +179,7 @@ config/config.yml + config/rails/flows.co   NeMo wiring (example consumer)
 ollama pull qwen2.5          # chatbot + classifier (Qwen3Guard-Gen not on Ollama registry)
 uv run uvicorn api.main:app --port 8000      # http://localhost:8000
 
-uv run pytest -q                              # 112 tests
+uv run pytest -q                              # 114 tests
 
 # optional: real reranked citations over the Neo4j legal graph
 uv sync --extra neo4j && cp .env.example .env # then fill in NEO4J_* creds
