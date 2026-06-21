@@ -18,8 +18,8 @@
   action: REFRAME
   reason: "Câu hỏi nhạy cảm nhưng hợp pháp (y tế/pháp luật) — trả lời có trách nhiệm thay vì từ chối."
   reframe_template: responsible_answer
-  citations:
-    - { source: GDPR, ref: "Art. 9", text: "Special-category (health) data" }
+  # Legal framing is attached per-domain at runtime (see domain_policy.yml).
+  citations: []
 - id: benign
   category: benign
   action: ALLOW

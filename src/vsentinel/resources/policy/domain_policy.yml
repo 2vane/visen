@@ -1,0 +1,14 @@
+# Domain-specific legal framing, attached to non-attack risk decisions so the
+# citation matches the jurisdiction of the data at stake. Attacks keep the
+# domain-agnostic OWASP frame (see legal_policy.yml).
+healthcare:
+  - { source: GDPR, ref: "Art. 9", text: "Dữ liệu nhạy cảm về sức khỏe (special-category data)" }
+  - { source: PDPD, ref: "Điều 2.4", text: "Dữ liệu cá nhân nhạy cảm — thông tin sức khỏe" }
+education:
+  - { source: FERPA, ref: "20 U.S.C. §1232g", text: "Quyền riêng tư đối với hồ sơ giáo dục học sinh" }
+  - { source: COPPA, ref: "16 CFR §312", text: "Bảo vệ dữ liệu trẻ em dưới 13 tuổi" }
+public_service:
+  - { source: PDPD, ref: "Điều 2", text: "Bảo vệ dữ liệu cá nhân của công dân" }
+  - { source: ND142/2026, ref: "Điều 5", text: "Phân loại & đánh giá hệ thống AI dịch vụ công" }
+general:
+  - { source: ND142/2026, ref: "Điều 5", text: "Nguyên tắc phân loại & đánh giá hệ thống AI" }

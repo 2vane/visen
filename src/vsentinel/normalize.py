@@ -14,14 +14,20 @@ def fold_diacritics(text: str) -> str:
     return unicodedata.normalize("NFC", stripped).replace("đ", "d").replace("Đ", "D").lower()
 
 
-def _decode_leet(text: str) -> str:
-    out = []
-    for tok in text.split(" "):
-        if any(c.isalpha() for c in tok) and any(c in LEET for c in tok):
-            out.append("".join(LEET.get(c, c) for c in tok))
-        else:
-            out.append(tok)
-    return " ".join(out)
+def _has_leet_obfuscation(text: str) -> bool:
+    """True when a leet char plausibly substitutes a letter *inside* a word
+    (``h4ck``, ``p4ssw0rd``, ``ign0re``) — i.e. flanked by letters on both sides.
+
+    Legitimate numerics are NOT flagged: a measurement/date/ordinal keeps its
+    digits at the number↔letter boundary (``70kg``, ``5km``, ``mp3``, ``covid19``),
+    never between two letters. We only flag here; we never rewrite the text —
+    decoding leet for detection happens in ``detect.score_rules`` so a spurious
+    decode can't corrupt the canonical text (``70kg`` → ``tokg``).
+    """
+    for i in range(1, len(text) - 1):
+        if text[i] in LEET and text[i - 1].isalpha() and text[i + 1].isalpha():
+            return True
+    return False
 
 
 def normalize(text: str) -> tuple[str, list[str]]:
@@ -37,10 +43,12 @@ def normalize(text: str) -> tuple[str, list[str]]:
         flags.append("excess_spacing")
         work = re.sub(r"\b\w(?: \w)+\b", lambda m: m.group(0).replace(" ", ""), work)
 
-    leet_decoded = _decode_leet(work)
-    if leet_decoded != work and re.search(r"[a-zA-Z]", work):
+    # Flag in-word leet substitution, but DO NOT rewrite the text: doing so
+    # corrupts legitimate numerics (70kg -> tokg). Decoding for detection lives
+    # in detect.score_rules, where a spurious decode can't leak into retrieval
+    # or the user-visible normalized text.
+    if _has_leet_obfuscation(work):
         flags.append("leetspeak")
-        work = leet_decoded
 
     folded = fold_diacritics(work)
     if folded != work.lower():

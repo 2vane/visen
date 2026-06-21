@@ -30,8 +30,8 @@ class Chatbot(Protocol):
 class OllamaClassifier:
     """Default classifier via Ollama (safe/controversial/unsafe).
 
-    Designed for Qwen3Guard-Gen, but it is not on the Ollama registry, so the
-    default model is ``qwen2.5`` (the classifier prompt is model-agnostic).
+    The default model is ``qwen2.5``; the classifier prompt is model-agnostic,
+    so any dedicated multilingual guard model can be swapped in via ``model``.
     """
 
     def __init__(self, model: str = "qwen2.5", base_url: str | None = None, timeout: float = 15):

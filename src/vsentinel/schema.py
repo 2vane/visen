@@ -42,10 +42,13 @@ class OutputCheck(BaseModel):
     verdict: Verdict = "ALLOW"
     redactions: list[str] = Field(default_factory=list)
 
+Domain = Literal["public_service", "education", "healthcare", "general"]
+
 class DecisionTrace(BaseModel):
     input_raw: str
     input_normalized: str = ""
     obfuscation_flags: list[str] = Field(default_factory=list)
+    domain: Domain = "general"
     risk: RiskInfo = Field(default_factory=RiskInfo)
     decision: Decision = "ALLOW"
     policy: PolicyInfo = Field(default_factory=PolicyInfo)

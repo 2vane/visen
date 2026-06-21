@@ -25,6 +25,7 @@ import time
 from vsentinel.backends import Chatbot, Classifier, OllamaChatbot, OllamaClassifier
 from vsentinel.config import SentinelConfig
 from vsentinel.detect import score_rules
+from vsentinel.domains import detect_domain
 from vsentinel.normalize import normalize
 from vsentinel.policy import categorize, decide
 from vsentinel.retrieve import Retriever
@@ -63,11 +64,13 @@ class Sentinel:
         rule_score, hits = score_rules(norm, flags, raw=message)
         severity = self.classifier(message, "user")
         category = categorize(rule_score, hits, severity, self.config.attack_threshold)
-        decision, policy, directive = decide(category, severity, self._retriever)
+        domain = detect_domain(norm)
+        decision, policy, directive = decide(category, severity, self._retriever, domain)
         trace = DecisionTrace(
             input_raw=message,
             input_normalized=norm,
             obfuscation_flags=flags,
+            domain=domain,
             risk=RiskInfo(
                 score=rule_score, category=category, guard_severity=severity, rules_fired=hits
             ),

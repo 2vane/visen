@@ -7,10 +7,24 @@ def test_strips_zero_width_and_flags():
     assert "​" not in out
 
 
-def test_decodes_leetspeak():
+def test_flags_leetspeak_without_corrupting_text():
+    # normalize flags in-word leet but must NOT rewrite the text — substituting
+    # would corrupt legitimate numerics (decoding for detection is in detect).
     out, flags = normalize("h4ck h3 th0ng")
-    assert "hack he thong" in out
     assert "leetspeak" in flags
+    assert out == "h4ck h3 th0ng"
+
+
+def test_measurement_not_corrupted():
+    # Regression: '70kg' was being leet-decoded to 'tokg' (7->t, 0->o).
+    out, flags = normalize("tôi nặng 70kg")
+    assert "70kg" in out
+    assert "leetspeak" not in flags
+    for text, token in [("uống 500mg", "500mg"), ("đi 5km", "5km"),
+                        ("covid19", "covid19"), ("file mp3", "mp3")]:
+        out, flags = normalize(text)
+        assert token in out, text
+        assert "leetspeak" not in flags, text
 
 
 def test_fold_diacritics():

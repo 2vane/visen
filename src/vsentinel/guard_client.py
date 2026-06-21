@@ -2,9 +2,8 @@ from __future__ import annotations
 from typing import Literal
 from vsentinel.ollama_client import chat, OllamaError
 
-# Qwen3Guard-Gen is the designed multilingual safety classifier, but it is not
-# on the Ollama registry; default to qwen2.5 (the classifier prompt is
-# model-agnostic). Override with VSENTINEL_GUARD_MODEL / SentinelConfig.
+# Default safety classifier. The prompt is model-agnostic, so swap in any
+# dedicated multilingual guard model via VSENTINEL_GUARD_MODEL / SentinelConfig.
 GUARD_MODEL = "qwen2.5"
 _PROMPT = (
     "You are a safety classifier. Classify the following {role} message. "

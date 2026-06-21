@@ -122,7 +122,7 @@ from vsentinel import SentinelConfig
 config = SentinelConfig(
     ollama_url="http://localhost:11434",   # ignored when custom backends injected
     chat_model="qwen2.5",
-    guard_model="qwen2.5",                 # designed for Qwen3Guard-Gen; not on Ollama registry
+    guard_model="qwen2.5",                 # any dedicated guard model via VSENTINEL_GUARD_MODEL
     attack_threshold=0.8,                  # rule_score >= this → BLOCK (attack)
     retrieve_k=2,                          # legal articles retrieved for grounding
     articles_path=None,                    # None → packaged decree data
@@ -215,7 +215,7 @@ uv run python examples/offline_fake_backend.py   # no Ollama required
 1. **Jailbreak / prompt-injection detection** — context-aware, Vietnamese-first.
 2. **Legal & safety compliance** — aligned to **Nghị định 142/2026/NĐ-CP**, the implementing decree for Vietnam's AI Law (Luật Trí tuệ nhân tạo, Luật 63/2025/QH15).
 
-Unlike Western guardrails that either leak on non-English jailbreaks or **over-refuse** sensitive-but-legal questions, V-Sentinel blocks genuine attacks, *reframes* sensitive-but-legal questions so they get a helpful answer, and cites the legal/standard basis for every decision.
+Unlike Western guardrails that either leak on non-English jailbreaks or **over-refuse** sensitive-but-legal questions, V-Sentinel blocks genuine attacks, *reframes* sensitive-but-legal questions so they get a helpful answer, and cites the legal/standard basis for every decision — **per domain** (education cites FERPA/COPPA, healthcare cites GDPR/PDPD, public services cite PDPD/ND-142), so the jurisdiction always matches the data at stake.
 
 ## Five-stage pipeline
 
@@ -225,9 +225,10 @@ User input
 ▼ STAGE 0 · Vietnamese normalization      (normalize.py)   defeat obfuscation/evasion
 ▼ STAGE 1 · Risk scoring & categorization (detect.py + guard_client.py)
               deterministic rules (backbone; base64 + VN/EN/CJK patterns)
-              + LLM classifier severity (qwen2.5; designed for Qwen3Guard-Gen)
-▼ STAGE 2 · Policy engine                 (policy.py + pii.py + retrieve.py)
-              ND-142/2026 + PII + GDPR/OWASP tags; BM25 cites the article
+              + LLM classifier severity (qwen2.5; pluggable guard model)
+▼ STAGE 2 · Policy engine                 (policy.py + domains.py + pii.py + retrieve.py)
+              domain-aware legal framing — education→FERPA/COPPA, health→GDPR/PDPD,
+              public-service→PDPD/ND-142, attacks→OWASP; BM25 cites the article
               → decision: ALLOW | REFRAME | BLOCK
 ▼ STAGE 3 · Generation                    (generate.py)    chatbot answers (Qwen2.5)
 ▼ STAGE 4 · Output verification           (verify.py)      PII leak / unsafe → REDACT|BLOCK
@@ -238,7 +239,7 @@ Deterministic rules are the **backbone** — they decide even when the LLM is of
 
 ## Tech stack
 
-Python 3.13 (uv) · NeMo Guardrails · Ollama (`qwen2.5` chatbot + classifier; designed for Qwen3Guard-Gen) · regex+context PII · `rank_bm25` (RAG citation) · FastAPI + vanilla-JS UI · pytest.
+Python 3.13 (uv) · NeMo Guardrails · Ollama (`qwen2.5` chatbot + classifier) · regex+context PII · `rank_bm25` (RAG citation) · FastAPI + vanilla-JS UI · pytest.
 
 ## Prerequisites
 
@@ -247,7 +248,7 @@ Python 3.13 (uv) · NeMo Guardrails · Ollama (`qwen2.5` chatbot + classifier; d
   ```bash
   ollama pull qwen2.5         # chatbot + safety classifier (one model)
   ```
-  > The classifier is *designed* for **Qwen3Guard-Gen** (multilingual, safe/controversial/unsafe), but it is not on the Ollama registry, so by default V-Sentinel uses `qwen2.5` for the classifier too (the prompt is model-agnostic). Point it at a dedicated guard with `VSENTINEL_GUARD_MODEL=...` once available.
+  > V-Sentinel uses `qwen2.5` for the safety classifier by default. The classifier prompt is model-agnostic, so you can point it at any dedicated multilingual guard model with `VSENTINEL_GUARD_MODEL=...`.
   > If a model is unavailable, V-Sentinel degrades gracefully: the guard fails safe to `controversial` (→ REFRAME) and the chatbot returns a Vietnamese fallback message — the deterministic rules still block attacks.
 
 ## Setup
@@ -282,6 +283,50 @@ API directly:
 ```bash
 curl -s localhost:8000/chat -H 'Content-Type: application/json' \
   -d '{"message":"Giờ làm việc của bệnh viện?"}' | python -m json.tool
+```
+
+## Use as a guardrail proxy (any chat app)
+
+V-Sentinel also exposes an **OpenAI-compatible** endpoint, so it can sit in front
+of Ollama as a transparent guardrail: point any chat app that allows a custom
+base URL at it, and every turn is screened → guarded-generated → screened before
+the app ever sees a reply. The built-in web page then becomes a **live monitor**.
+
+```
+POST /v1/chat/completions   # OpenAI Chat Completions (streaming + non-streaming)
+GET  /v1/models             # OpenAI model list
+POST /api/chat              # Ollama-native chat (NDJSON streaming)
+GET  /api/tags              # Ollama-native model list
+GET  /recent                # recent decisions (powers the dashboard monitor)
+```
+
+Configure the client with:
+
+| Field | Value |
+|-------|-------|
+| Base URL | `http://localhost:8000/v1` |
+| API key | any non-empty string (e.g. `sk-local`) |
+| Model | `qwen2.5` (or whatever `VSENTINEL_CHAT_MODEL` is) |
+
+Then open `http://localhost:8000` and click **👁 Theo dõi trực tiếp** — turns sent
+from the external app appear in the dashboard with their full decision trace.
+
+**Works with** any app that supports a custom OpenAI base URL — Open WebUI,
+LibreChat, Jan, Chatbox, Cherry Studio, BoltAI, AnythingLLM — and the **Codex
+CLI** (set `OPENAI_BASE_URL=http://localhost:8000/v1`, or a custom
+`model_provider`). Ollama-native clients (e.g. **Enchanted**) can instead point
+their Ollama host at `http://localhost:8000` and use `/api/chat` + `/api/tags`.
+**Does not work** with the official **ChatGPT desktop app**, which only talks to
+OpenAI's servers and has no custom-endpoint setting.
+
+> Scope: the guardrail acts on the latest user message (prior turns aren't
+> replayed to the model), and streaming replays the already-screened text so
+> output screening stays intact.
+
+```bash
+curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model":"qwen2.5","messages":[{"role":"user","content":"Tôi bị tiểu đường nên ăn gì?"}]}' \
+  | python -m json.tool
 ```
 
 ## NeMo Guardrails
@@ -322,7 +367,8 @@ Policy files and decree data are packaged inside the library under
 | Packaged path | Purpose |
 |------|---------|
 | `src/vsentinel/resources/policy/jailbreak_patterns.yml` | VN+EN+CJK jailbreak/injection regex, OWASP-tagged (base64 decoded too) |
-| `src/vsentinel/resources/policy/legal_policy.yml` | categories → ND-142/2026 `Điều/Khoản` + OWASP + GDPR/PDPD tags + action |
+| `src/vsentinel/resources/policy/legal_policy.yml` | categories → ND-142/2026 `Điều/Khoản` + OWASP tags + action |
+| `src/vsentinel/resources/policy/domain_policy.yml` | per-domain legal framing (education→FERPA/COPPA, health→GDPR/PDPD, public-service→PDPD/ND-142) |
 | `src/vsentinel/resources/policy/pii_recognizers.yml` | Vietnamese PII regex + context gating (CCCD/CMND/phone/MST/BHXH/passport/bank account/email) |
 | `src/vsentinel/resources/policy/reframe_templates.yml` | safe-rewrite templates for sensitive-but-legal topics |
 | `src/vsentinel/resources/data/decree_articles.json` | OCR'd ND-142/2026 articles for citation/RAG |
@@ -332,7 +378,6 @@ Policy files and decree data are packaged inside the library under
 - **Nghị định 142/2026/NĐ-CP** — implementing decree for Luật TTNT (Luật 63/2025/QH15); risk-based classification & conformity assessment of AI systems.
 - **MultiJail** (Vietnamese-inclusive jailbreak set) — Deng et al., ICLR 2024, [arXiv:2310.06474](https://arxiv.org/abs/2310.06474).
 - **XSTest** (over-refusal benchmark) — Röttger et al., [arXiv:2308.01263](https://arxiv.org/abs/2308.01263).
-- **Qwen3Guard** — Qwen Team, [arXiv:2510.14276](https://arxiv.org/abs/2510.14276) (safe/controversial/unsafe, 119 languages incl. Vietnamese, Apache-2.0).
 - **OWASP Top 10 for LLM Applications 2025** — [genai.owasp.org](https://genai.owasp.org/).
 - **NeMo Guardrails** — [docs.nvidia.com/nemo/guardrails](https://docs.nvidia.com/nemo/guardrails/).
 - Vietnam data-protection mapping: Nghị định 13/2023/NĐ-CP (PDPD); GDPR Art. 5/9/17; EU AI Act risk tiers.

@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from api import ollama_compat, openai_compat, store
 from vsentinel import Sentinel
 
 LOGGER = logging.getLogger("vsentinel.api")
@@ -96,6 +97,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="V-Sentinel", lifespan=lifespan)
+# Guardrail proxy: external chat UIs can route through here (OpenAI- and
+# Ollama-native wire formats), so any client points at this server, not Ollama.
+app.include_router(openai_compat.build_router(sentinel, store.record))
+app.include_router(ollama_compat.build_router(sentinel, store.record))
 
 
 @app.exception_handler(Exception)
@@ -112,13 +117,25 @@ class ChatIn(BaseModel):
 @app.post("/chat", dependencies=[Depends(_enforce_limits)])
 def chat(body: ChatIn):
     trace = sentinel.run(body.message)
+    store.record("web", trace)
     LOGGER.info("chat decision=%s latency_ms=%s", trace.decision, trace.latency_ms)
     return trace
 
 
+@app.get("/recent")
+def recent(after: int = 0, limit: int = 50):
+    """Recent decisions (any source) for the live-monitor dashboard."""
+    return store.recent(after=after, limit=min(max(limit, 1), 100))
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "retriever": type(sentinel._retriever).__name__}
+    return {
+        "status": "ok",
+        "retriever": type(sentinel._retriever).__name__,
+        "guard_model": sentinel.config.guard_model,
+        "chat_model": sentinel.config.chat_model,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)

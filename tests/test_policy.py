@@ -54,3 +54,35 @@ def test_decide_falls_back_for_unknown_source():
     """An unrecognized source label falls back to the decree (never breaks the enum)."""
     _, policy, _ = decide("illegal", "unsafe", _FakeRetriever("MADE_UP"))
     assert any(c.source == "ND142/2026" for c in policy.citations)
+
+
+# --- domain-aware legal framing ----------------------------------------------
+
+def test_decide_education_cites_ferpa_not_health():
+    """An education turn must be framed with FERPA/COPPA, not health GDPR."""
+    _, policy, _ = decide("sensitive_legal", "controversial", R, domain="education")
+    sources = {c.source for c in policy.citations}
+    assert "FERPA" in sources
+    assert "GDPR" not in sources
+
+
+def test_decide_healthcare_cites_health_law():
+    _, policy, _ = decide("sensitive_legal", "controversial", R, domain="healthcare")
+    sources = {c.source for c in policy.citations}
+    assert "GDPR" in sources and "PDPD" in sources
+    assert "FERPA" not in sources
+
+
+def test_decide_attack_stays_domain_agnostic():
+    """Attacks keep the OWASP frame regardless of domain (no FERPA/GDPR drift)."""
+    _, policy, _ = decide("attack", "safe", R, domain="education")
+    sources = {c.source for c in policy.citations}
+    assert "OWASP" in sources
+    assert "FERPA" not in sources and "GDPR" not in sources
+
+
+def test_decide_citations_deduped():
+    """public_service maps to ND142 and the retriever also returns ND142 — once."""
+    _, policy, _ = decide("sensitive_legal", "controversial", R, domain="public_service")
+    keys = [(c.source, c.ref) for c in policy.citations]
+    assert len(keys) == len(set(keys))

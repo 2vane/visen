@@ -23,7 +23,11 @@
   .brand b{font-size:18px;letter-spacing:-.2px}
   .brand .v{color:var(--accent)}
   .brand span{font-size:13px;color:var(--muted)}
-  .health{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+  .mon{margin-left:auto;font-size:12.5px;border:1px solid var(--line);background:#fff;color:var(--muted);
+       padding:6px 12px;border-radius:8px;cursor:pointer;transition:.15s}
+  .mon:hover{border-color:var(--accent);color:var(--accent)}
+  .mon.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .health{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
   .dot{width:9px;height:9px;border-radius:50%;background:#9aa6b6}
   .dot.ok{background:var(--allow)} .dot.down{background:var(--block)}
 
@@ -51,6 +55,9 @@
   .msg.a{align-self:flex-start;background:#f3f5f9;border:1px solid var(--line);border-bottom-left-radius:4px}
   .msg.a.blocked{background:var(--block-bg);border-color:#f0cdc7}
   .msg.err{align-self:center;background:var(--block-bg);color:var(--block);font-size:13px}
+  .msg.clk{cursor:pointer}
+  .msg.clk:hover{filter:brightness(.985)}
+  .msg.sel{outline:2px solid var(--accent);outline-offset:1px}
   #bar{display:flex;gap:9px;padding:12px;border-top:1px solid var(--line);background:#fbfcfe}
   #msg{flex:1;padding:11px 13px;border:1px solid var(--line);border-radius:9px;font-size:14.5px;font-family:inherit}
   #msg:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -62,6 +69,9 @@
   #panel{overflow:auto;padding:0}
   .ph{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
   .ph h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .ph .reset{margin-left:auto;font-size:12px;border:1px solid var(--line);background:#fff;color:var(--muted);
+             padding:5px 11px;border-radius:7px;cursor:pointer;transition:.15s}
+  .ph .reset:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
   #trace{padding:16px}
   .placeholder{color:var(--muted);font-size:13.5px;line-height:1.5}
 
@@ -116,18 +126,13 @@
     <b><span class="v">V</span>-Sentinel</b>
     <span>Lá chắn kiểm soát kép · trợ lý dịch vụ công Việt Nam</span>
   </div>
+  <button id="mon" class="mon" title="Hiển thị các lượt đi qua proxy (Open WebUI…)">👁 Theo dõi trực tiếp</button>
   <div class="health"><span id="hdot" class="dot"></span><span id="htxt">đang kiểm tra…</span></div>
 </header>
 
 <main>
   <section id="chat" class="card">
-    <div id="log">
-      <div class="empty" id="empty">
-        <h2>Thử một câu hỏi</h2>
-        <div>Mỗi lượt đi qua 5 tầng kiểm soát. Bảng bên phải hiển thị lý do quyết định.</div>
-        <div class="chips" id="chips"></div>
-      </div>
-    </div>
+    <div id="log"></div>
     <div id="bar">
       <input id="msg" placeholder="Nhập câu hỏi…" autocomplete="off">
       <button id="send">Gửi</button>
@@ -135,7 +140,8 @@
   </section>
 
   <aside id="panel" class="card">
-    <div class="ph"><h3>Guardrail Decision Trace</h3></div>
+    <div class="ph"><h3>Guardrail Decision Trace</h3>
+      <button id="reset" class="reset" title="Xoá toàn bộ hội thoại">＋ Hội thoại mới</button></div>
     <div id="trace">
       <p class="placeholder">Chưa có lượt nào. Gửi một câu hỏi để xem chuỗi quyết định
       ALLOW / REFRAME / BLOCK, luật kích hoạt (OWASP), và căn cứ pháp lý (ND-142/2026).</p>
@@ -167,32 +173,86 @@ const log = document.getElementById('log');
 const trace = document.getElementById('trace');
 const input = document.getElementById('msg');
 const sendBtn = document.getElementById('send');
-
-const chips = document.getElementById('chips');
-EXAMPLES.forEach(group => {
-  const lbl = document.createElement('div');
-  lbl.className = 'eg-lbl'; lbl.textContent = group.label;
-  chips.appendChild(lbl);
-  group.items.forEach(ex => {
-    const c = document.createElement('button');
-    c.className = 'chip'; c.textContent = ex.length > 38 ? ex.slice(0,37)+'…' : ex;
-    c.title = ex;
-    c.onclick = () => { input.value = ex; input.focus(); };
-    chips.appendChild(c);
-  });
-});
+const resetBtn = document.getElementById('reset');
 
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt!=null) e.textContent = txt; return e; };
-function bubble(cls, txt){
+
+// --- conversation state (persisted so a reload doesn't wipe the demo) --------
+const STORE_KEY = 'vsentinel.chat.v1';
+const TRACE_PLACEHOLDER = '<p class="placeholder">Chưa có lượt nào. Gửi một câu hỏi để xem chuỗi '
+  + 'quyết định ALLOW / REFRAME / BLOCK, luật kích hoạt (OWASP), và căn cứ pháp lý (ND-142/2026).</p>';
+let turns = [];          // [{role:'user'|'assistant'|'error', text, blocked?, trace?}]
+let guardModel = '';     // resolved from /health, shown in the trace label
+let activeBubble = null;
+
+function persist(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(turns)); }catch{} }
+function loadTurns(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); }catch{ return []; } }
+
+function buildEmpty(){
+  const wrap = el('div', 'empty'); wrap.id = 'empty';
+  wrap.appendChild(el('h2', null, 'Thử một câu hỏi'));
+  wrap.appendChild(el('div', null, 'Mỗi lượt đi qua 5 tầng kiểm soát. Bảng bên phải hiển thị lý do quyết định.'));
+  const chips = el('div', 'chips');
+  EXAMPLES.forEach(group => {
+    chips.appendChild(el('div', 'eg-lbl', group.label));
+    group.items.forEach(ex => {
+      const c = el('button', 'chip', ex.length > 38 ? ex.slice(0,37)+'…' : ex);
+      c.title = ex;
+      c.onclick = () => { input.value = ex; input.focus(); };
+      chips.appendChild(c);
+    });
+  });
+  wrap.appendChild(chips);
+  log.appendChild(wrap);
+}
+
+function selectBubble(b, t){
+  if(activeBubble) activeBubble.classList.remove('sel');
+  activeBubble = b || null;
+  if(b) b.classList.add('sel');
+  if(t) render(t);
+}
+
+function addBubble(turn){
   const e = document.getElementById('empty'); if(e) e.remove();
-  const d = el('div', 'msg ' + cls, txt);
-  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+  let cls = 'a';
+  if(turn.role === 'user') cls = 'u';
+  else if(turn.role === 'error') cls = 'err';
+  else if(turn.blocked) cls = 'a blocked';
+  const d = el('div', 'msg ' + cls, turn.text);
+  if(turn.role === 'assistant' && turn.trace){
+    d.classList.add('clk');
+    d.title = 'Xem lại chuỗi quyết định';
+    d.onclick = () => selectBubble(d, turn.trace);
+  }
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+function restore(){
+  turns = loadTurns();
+  if(!turns.length){ buildEmpty(); return; }
+  let last = null;
+  turns.forEach(turn => {
+    const b = addBubble(turn);
+    if(turn.role === 'assistant' && turn.trace) last = {b, t: turn.trace};
+  });
+  if(last) selectBubble(last.b, last.t);
+}
+
+function newChat(){
+  if(turns.length && !confirm('Xoá toàn bộ hội thoại hiện tại?')) return;
+  turns = []; persist(); activeBubble = null;
+  log.innerHTML = ''; buildEmpty();
+  trace.innerHTML = TRACE_PLACEHOLDER;
+  input.focus();
 }
 
 async function checkHealth(){
   const dot = document.getElementById('hdot'), txt = document.getElementById('htxt');
   try{
     const r = await fetch('/health'); const h = await r.json();
+    guardModel = h.guard_model || '';
     dot.className = 'dot ok'; txt.textContent = 'sẵn sàng · ' + (h.retriever || 'retriever');
   }catch{ dot.className = 'dot down'; txt.textContent = 'không kết nối được API'; }
 }
@@ -200,19 +260,74 @@ async function checkHealth(){
 async function send(){
   const text = input.value.trim(); if(!text) return;
   input.value = ''; sendBtn.disabled = true;
-  bubble('u', text);
+  const u = {role:'user', text}; turns.push(u); addBubble(u); persist();
   try{
     const r = await fetch('/chat', {method:'POST', headers:{'Content-Type':'application/json'},
                                     body: JSON.stringify({message:text})});
-    if(!r.ok){ bubble('err', 'Lỗi máy chủ (' + r.status + ')'); return; }
+    if(!r.ok){
+      const e = {role:'error', text:'Lỗi máy chủ (' + r.status + ')'};
+      turns.push(e); addBubble(e); persist(); return;
+    }
     const t = await r.json();
-    bubble('a' + (t.decision === 'BLOCK' ? ' blocked' : ''), t.final_message || '(không có phản hồi)');
-    render(t);
-  }catch(err){ bubble('err', 'Không gọi được /chat: ' + err.message); }
-  finally{ sendBtn.disabled = false; input.focus(); }
+    const a = {role:'assistant', text: t.final_message || '(không có phản hồi)',
+               blocked: t.decision === 'BLOCK', trace: t};
+    turns.push(a); persist();
+    selectBubble(addBubble(a), t);
+  }catch(err){
+    const e = {role:'error', text:'Không gọi được /chat: ' + err.message};
+    turns.push(e); addBubble(e); persist();
+  }finally{ sendBtn.disabled = false; input.focus(); }
 }
+
+// --- live monitor: a read-only feed of turns flowing through the proxy --------
+// Distinct mode from the built-in chat: own-chat input is disabled while on, and
+// events are de-duped by sequence id, so nothing is rendered twice.
+const monBtn = document.getElementById('mon');
+const SOURCE_VI = {web:'UI', openai:'OpenAI API', ollama:'Ollama API'};
+let monTimer = null, monOn = false, lastSeq = 0;
+const seenSeq = new Set();
+
+async function pollMonitor(){
+  try{
+    const r = await fetch('/recent?after=' + lastSeq + '&limit=50');
+    if(!r.ok) return;
+    const items = await r.json();
+    items.forEach(ev => {
+      lastSeq = Math.max(lastSeq, ev.seq);
+      if(seenSeq.has(ev.seq)) return;
+      seenSeq.add(ev.seq);
+      const t = ev.trace;
+      addBubble({role:'user', text:'[' + (SOURCE_VI[ev.source] || ev.source) + '] ' + (t.input_raw || '')});
+      const a = {role:'assistant', text: t.final_message || '(không có phản hồi)',
+                 blocked: t.decision === 'BLOCK', trace: t};
+      selectBubble(addBubble(a), t);
+    });
+  }catch{}
+}
+
+function toggleMonitor(){
+  monOn = !monOn;
+  activeBubble = null; log.innerHTML = ''; trace.innerHTML = TRACE_PLACEHOLDER;
+  if(monOn){
+    monBtn.classList.add('on'); monBtn.textContent = '● Đang theo dõi';
+    input.disabled = sendBtn.disabled = true;
+    input.placeholder = 'Chế độ theo dõi — gửi câu hỏi từ ứng dụng chat ngoài qua proxy';
+    lastSeq = 0; seenSeq.clear();
+    pollMonitor(); monTimer = setInterval(pollMonitor, 1500);
+  }else{
+    clearInterval(monTimer); monTimer = null;
+    monBtn.classList.remove('on'); monBtn.textContent = '👁 Theo dõi trực tiếp';
+    input.disabled = sendBtn.disabled = false;
+    input.placeholder = 'Nhập câu hỏi…';
+    restore(); input.focus();
+  }
+}
+
 sendBtn.onclick = send;
-input.addEventListener('keydown', e => { if(e.key === 'Enter') send(); });
+resetBtn.onclick = newChat;
+monBtn.onclick = toggleMonitor;
+// isComposing guard: don't send mid-IME-composition (Vietnamese telex/VNI input).
+input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing) send(); });
 
 function section(title){ const s = el('div','sec'); s.appendChild(el('h4', null, title)); return s; }
 function kv(parent, k, v){ const r = el('div','row'); r.appendChild(el('span','k',k)); r.appendChild(el('span','val',v)); parent.appendChild(r); }
@@ -226,7 +341,10 @@ function render(t){
   // ---- verdict header ----
   const v = el('div', 'verdict ' + t.decision);
   v.appendChild(el('span', 'badge ' + t.decision, t.decision));
-  const cat = el('div','cat'); cat.innerHTML = 'Phân loại: <b>' + (risk.category||'—') + '</b>';
+  const DOMAIN_VI = {public_service:'Dịch vụ công', education:'Giáo dục', healthcare:'Y tế', general:'Chung'};
+  const cat = el('div','cat');
+  cat.innerHTML = 'Phân loại: <b>' + (risk.category||'—') + '</b> · Lĩnh vực: <b>'
+    + (DOMAIN_VI[t.domain] || t.domain || '—') + '</b>';
   v.appendChild(cat);
   if(ruleDriven){
     const bb = el('div','backbone'); bb.innerHTML = '⚙ Chặn bằng luật<br>không cần LLM';
@@ -240,7 +358,7 @@ function render(t){
   const m = el('div', 'meter' + ((risk.score||0) >= 0.8 ? ' hot' : ''));
   const fill = el('i'); fill.style.width = Math.min(100,(risk.score||0)*100) + '%'; m.appendChild(fill);
   rs.appendChild(m);
-  kv(rs, 'Bộ phân loại (Qwen3Guard)', risk.guard_severity || '—');
+  kv(rs, 'Bộ phân loại an toàn' + (guardModel ? ' (' + guardModel + ')' : ''), risk.guard_severity || '—');
   const rl = section('Luật kích hoạt');
   if(rules.length){
     const tags = el('div','tags');
@@ -302,8 +420,9 @@ function render(t){
   trace.appendChild(f);
 }
 
-checkHealth();
-input.focus();
+// Resolve health (guard model label) before restoring so a reloaded trace
+// shows the classifier name, then rebuild the persisted conversation.
+(async () => { await checkHealth(); restore(); input.focus(); })();
 </script>
 </body>
 </html>

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from vsentinel.normalize import fold_diacritics
+from vsentinel.normalize import LEET, fold_diacritics
 from vsentinel.resources import policy_file
 from vsentinel.schema import RuleHit
 
@@ -17,6 +17,22 @@ _DEFAULT = policy_file("jailbreak_patterns.yml")
 # Decode long base64-looking tokens and scan the plaintext too. Conservative:
 # only well-formed, padded tokens that decode to printable text with letters.
 _B64_RX = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+
+
+def _decode_leet(text: str) -> str:
+    """Map leet chars to letters for *matching only* (1gn0r3 -> ignore).
+
+    Safe to be aggressive here: the result is tested against attack regexes,
+    never shown to the user or used for retrieval, so a spurious decode
+    (70kg -> tokg) simply fails to match — it can't corrupt anything.
+    """
+    out = []
+    for tok in text.split(" "):
+        if any(c.isalpha() for c in tok) and any(c in LEET for c in tok):
+            out.append("".join(LEET.get(c, c) for c in tok))
+        else:
+            out.append(tok)
+    return " ".join(out)
 
 
 def _decode_b64_payloads(text: str) -> list[str]:
@@ -58,6 +74,9 @@ def score_rules(text: str, flags: list[str], raw: str | None = None) -> tuple[fl
     # text upstream, which would corrupt case-sensitive base64 before we see it.
     source = raw if raw is not None else text
     targets = [fold_diacritics(text)]
+    leet = _decode_leet(text)
+    if leet != text:
+        targets.append(fold_diacritics(leet))
     targets.extend(fold_diacritics(p) for p in _decode_b64_payloads(source))
 
     hits: list[RuleHit] = []
